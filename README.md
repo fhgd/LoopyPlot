@@ -11,7 +11,8 @@ python function like
 In order to explore the behavior of your sophisticated function by
 plotting diffent sweeps you can write
 
-    >>> tm = lp.TaskManager(quad)
+    >>> from loopyplot import TaskManager
+    >>> tm = TaskManager(quad)
     >>> tm.tasks.quad.args.x.sweep(0, 10, num=5)
     >>> tm.tasks.quad.args.offs.iterate(0, 60)
     >>> tm.run()
