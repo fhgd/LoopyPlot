@@ -35,6 +35,6 @@ plotting diffent sweeps you can write
 
 which results in a matplotlib figure with an interactive data cursor
 
-![Lissajous](./examples/lissajous.png)
+![Lissajous](./examples/lissajous.gif)
 
 You can click at any data point in order to update the data cursor and explore the relations in your plotted data.
