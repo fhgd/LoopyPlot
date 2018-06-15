@@ -1198,7 +1198,7 @@ class Argument:
                 ptr.configure()
 
     @config
-    def sweep(self, start, stop, step=1, num=None, concat=False):
+    def sweep(self, start, stop, step=1, num=None, zip='', concat=False):
         """Sweep linearly from start to stop incremented by step.
 
         >>> @Task
@@ -1257,19 +1257,19 @@ class Argument:
             self._ptr = ptr
 
         self._task.args._add_sweeped_arg(self)
-        #~ if self._task.debug:
-            #~ return self._ptr.sweep
+        if zip:
+            self._task.args.zip(self, zip)
 
     @config
-    def iterate(self, *items, concat=False):
+    def iterate(self, *items, zip='', concat=False):
         sweep = Iterate(*items)
         if concat:
             self._ptrs.append(SweepPointer(sweep))
         else:
             self._ptr = SweepPointer(sweep)
         self._task.args._add_sweeped_arg(self)
-        #~ if self._task.debug:
-            #~ return sweep
+        if zip:
+            self._task.args.zip(self, zip)
 
     @config
     def zip(self, *items):
