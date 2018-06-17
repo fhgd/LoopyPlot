@@ -193,10 +193,13 @@ class PlotManager:
         ypath = task._get_argpath(y)
         yunit = ypath[-1]._unit
         if len(ypath) == 1:
-            ylabel = self._path_to_label(ypath, task).replace('$', '')
+            ylabel = self._path_to_label(ypath, task)
+            self.ylabel(task, ylabel, yunit, row, col)
         else:
-            ylabel = ''
-        self.ylabel(task, ylabel, yunit, row, col)
+            ylabel = self._path_to_label(ypath, task, format='long')
+            self.ylabel(task, ylabel, yunit, row, col,
+                        rotation='vertical',
+                        horizontalalignment='center')
 
         args = dict(
             xpath=xpath,
@@ -279,8 +282,12 @@ class PlotManager:
                 try:
                     ylabel, yunit, args = self.labels[view, row, col, 'y']
                     if yunit:
+                        ylabel = ylabel.replace('$', '')
                         if ylabel:
-                            fmt = r'$\dfrac{{{}}}{{\mathsf{{{}}}}}$'
+                            if args['rotation'] == 'horizotal':
+                                fmt = r'$\dfrac{{{}}}{{\mathsf{{{}}}}}$'
+                            else:
+                                fmt = r'${}$ / {}'
                             ylabel = fmt.format(ylabel, yunit)
                         else:
                             ylabel = '[{}]'.format(yunit)
@@ -496,7 +503,7 @@ class PlotManager:
         return not self.is_window_open(window)
 
     @staticmethod
-    def _path_to_label(path, task):
+    def _path_to_label(path, task, format='short'):
         if path and len(task.depend_tasks.get(path[-1]._task, [])) < 2:
             _path = path[-1:]
         else:
@@ -507,8 +514,11 @@ class PlotManager:
             if param._task is task:
                 s = r'${}$'.format(name)
             else:
-                s = r'${}_\mathsf{{{}}}$'
-                s = s.format(name, param._task.name)
+                if format == 'short':
+                    s = r'${}_\mathsf{{{}}}$'
+                    s = s.format(name, param._task.name)
+                else:
+                    s = r'${}$'.format(repr(param).strip('<>'))
             label.append(s)
         return ' | '.join(label)
 
@@ -546,22 +556,32 @@ class PlotManager:
             leg_labels = []
             for ln, lm, yval in legs.get(ax, []):
                 ylabel = self._path_to_label(lm.ypath, lm.task)
-                if yval is not None:
-                    ylabel += ' = {}'.format(yval)
+                xlabel = self._path_to_label(lm.xpath, lm.task)
                 leg_lines.append(ln)
-                leg_labels.append(ylabel)
+                if xlabel and lm.xpath[-1].name in lm.task.returns:
+                    label = '{}({})'.format(ylabel, xlabel)
+                else:
+                    label = ylabel
+                if yval is not None:
+                    label += ' = {}'.format(yval)
+                leg_labels.append(label)
             if ax is line.axes:
                 arg_lines = []
+                params = []
+                if lm.xpath:
+                    params.append(lm.xpath[-1])
                 for name, arg in lmngr.task.args:
-                    if len(arg._states) > 1:
-                        _name = name.replace('_', '\_')
-                        val = arg.get_cache(cidx)
-                        if isinstance(val, Iterable) and not \
-                           isinstance(val, str):
-                            label = r'${} = \ldots$'.format(_name)
-                        else:
-                            label = r'${} = {:.7g}$'.format(_name, val)
-                        arg_lines.append(label)
+                    if arg not in params and len(arg._states) > 1:
+                        params.append(arg)
+                for arg in params:
+                    _name = arg.name.replace('_', '\_')
+                    val = arg.get_cache(cidx)
+                    if isinstance(val, Iterable) and not \
+                       isinstance(val, str):
+                        label = r'${} = \ldots$'.format(_name)
+                    else:
+                        label = r'${} = {:.7g}$'.format(_name, val)
+                    arg_lines.append(label)
                 leg_lines.append(line)
                 leg_labels.append('\n'.join(arg_lines))
                 leg = ax.legend(leg_lines, leg_labels,
