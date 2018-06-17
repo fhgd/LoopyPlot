@@ -497,8 +497,12 @@ class PlotManager:
 
     @staticmethod
     def _path_to_label(path, task):
+        if path and len(task.depend_tasks.get(path[-1]._task, [])) < 2:
+            _path = path[-1:]
+        else:
+            _path = path
         label = []
-        for param in path:
+        for param in _path:
             name = param.name.replace('_', '\_')
             if param._task is task:
                 s = r'${}$'.format(name)
