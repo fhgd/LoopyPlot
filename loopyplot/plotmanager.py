@@ -39,7 +39,7 @@ class PlotManager:
         self.tasks = {}     # view: [task, ...]
         self.selection = {}
         for num, fig in self.windows.items():
-            if fig is not None:
+            if self.is_window_open(num):
                 fig.clf()
                 fig.canvas.draw()
 
@@ -238,11 +238,11 @@ class PlotManager:
         if 'labelpad' not in kwargs:
             kwargs['labelpad'] = 0
         key = view, row, col, 'y'
-        if key not in self.labels and (label or unit):
+        if (label or unit) and key not in self.labels:
             self.labels[key] = label, unit, kwargs
-        elif unit == self.labels[key][1] and (label or unit):
+        elif (label or unit) and unit == self.labels[key][1]:
             self.labels[key] = '', unit, kwargs
-        elif unit != self.labels[key][1]:
+        elif (label or unit) and unit != self.labels[key][1]:
             msg = 'view={}, row={}, col={}: try to set ' \
                   'ylabel={!r} / {!r} but {!r} / {!r} ' \
                   'is used.'
