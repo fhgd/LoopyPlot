@@ -35,4 +35,8 @@ And now plot the data with
 which results in a matplotlib figure with an interactive data cursor.
 """
 
-from .taskmanager import Task, TaskManager
+
+from .taskmanager import Task, TaskManager, log
+
+from .utils import enable_logger
+enable_logger(log, 'info', 'short')
