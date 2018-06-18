@@ -1,16 +1,16 @@
 LoopyPlot
 =========
 
-Plot data from nested loops for scientific and engineering tasks in Python. With ...
+Plot data dependencies for scientific and engineering tasks in Python. With ...
 
 > Loo **_py_** Plot ... you can describe your problem in a plain
-> ![python](https://www.python.org) function
+> [python](https://www.python.org) function
 >
 > **_Loop_** yPlot ... you can run nested parameter sweeps with data
 > dependencies
 >
-> Loopy **_Plot_** ... you can explore the sweeped results by interactive
-> plots (many thanks to ![matplotlib](https://matplotlib.org/))
+> Loopy **_Plot_** ... you can explore the results by interactive plots
+> (many thanks to [matplotlib](https://matplotlib.org/))
 >
 > **_Loopy_** Plot ... you just configure what you want and everything
 > else is done in the background for you
@@ -47,7 +47,7 @@ function describes the specific experiment. The function arguments and
 return values are used for the administration of the experiment.
 
 LoopyPlot is a prototype implementation of the seven administration
-requirements above in order the write readable experiments.
+points above in order the write readable experiments.
 
 
 Simple Demo
