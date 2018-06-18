@@ -526,31 +526,36 @@ class PlotManager:
     def on_pick(self, event):
         idx = event.ind[0]
         line = event.artist
-        #~ line.figure.canvas.flush_events()
         lmngr = self.lines[line]
         line.figure.canvas.flush_events()
 
-        #~ xdata = line.get_xdata()
-        #~ ydata = line.get_ydata()
-        #~ lmngr.set_cursor(xdata, ydata, line.get_color(), idx)
+        legs = {}
+        xval = line.get_xdata()[idx]
+        yval = line.get_ydata()[idx]
+        lmngr.set_cursor(xval, yval, line.get_color(), 'o')
+        legs.setdefault(lmngr.ax, []).append([line, lmngr, yval])
 
         cidxs = lmngr.cidxs[line]
-        try:
+        if lmngr.squeeze:
             cidx = cidxs[idx]
-        except:
+            _cidxs = cidx
+        else:
             cidx = cidxs[0]
+            _cidxs = cidxs
 
-        legs = {}
         for task, confs in self.lms[lmngr.loc].items():
             if task is lmngr.task:
                 for lm in confs.values():
-                    ln, yval = lm.update_cursor(cidx)
+                    if lm is lmngr:
+                        continue
+                    ln, yval = lm.update_cursor(_cidxs)
                     legs.setdefault(lm.ax, []).append([ln, lm, yval])
             else:
                 for lm in confs.values():
                     if lm.cursor is not None:
                         lm.cursor.set_visible(False)
 
+        key = lmngr.get_key(cidx)
         for ax in self.axes[lmngr.loc].values():
             leg_lines = []
             leg_labels = []
@@ -570,8 +575,10 @@ class PlotManager:
                 params = []
                 if lm.xpath:
                     params.append(lm.xpath[-1])
-                for name, arg in lmngr.task.args:
-                    if arg not in params and len(arg._states) > 1:
+                else:
+                    arg_lines.append('index = {}'.format(idx))
+                for state, (name, arg) in zip(key, lmngr.task.args):
+                    if arg not in params and len(arg._states) > 1 and state is not None:
                         params.append(arg)
                 for arg in params:
                     _name = arg.name.replace('_', '\_')
@@ -621,6 +628,7 @@ class LineManager:
         self.loc = loc
         self.ax = ax
         self.task = task
+
         self.use_cursor = use_cursor
         self.kwargs = kwargs
         self.pm = pm
@@ -651,8 +659,6 @@ class LineManager:
                 level = self.task.args._nested_args[arg]
                 all_args.update(levels[level])
         self.mask = [arg in all_args for n, arg in self.task.args]
-        if not self.squeeze and not any(self.mask):
-            self.use_cursor = False
 
         self.lines = {}     # key: line
         self.cidxs = {}     # line: [cidx, ...]
@@ -714,7 +720,10 @@ class LineManager:
 
         if len(ydata):
             #~ self.set_cursor(xdata, ydata, line.get_color())
-            self.update_cursor(cidx)
+            if self.squeeze:
+                self.update_cursor_point(cidx)
+            else:
+                self.update_cursor_line(cidx)
 
 
         self.clen = self.task.clen
@@ -749,52 +758,54 @@ class LineManager:
             else:
                 yield m or s1 == s2
 
-    def update_cursor(self, cidx):
+    def update_cursor_line(self, cidx):
+        #~ print('update cursor with cidx =', cidx)
+        key = self.get_key(cidx)
+        line = self.lines[key]
+        xdata, ydata = line.get_data()
+        yval = self.set_cursor(xdata, ydata, line.get_color(), None)
+        self.show_accumulate_lines(cidx)
+        if not self.squeeze and not any(self.mask):
+            self.cursor.set_visible(False)
+        return line, yval
+
+    def update_cursor_point(self, cidx):
+        #~ print('update cursor with cidx =', cidx)
         key = self.get_key(cidx)
         line = self.lines[key]
         cidxs = self.cidxs[line]
 
         idx = cidxs.index(cidx)
         xdata, ydata = line.get_data()
-        yval = self.set_cursor(xdata, ydata, line.get_color(), idx)
+        yval = self.set_cursor(xdata[idx], ydata[idx], line.get_color(), 'o')
         self.show_accumulate_lines(cidx)
         return line, yval
 
-    def set_cursor(self, xdata, ydata, color, idx=-1, cidx=None):
+    def update_cursor(self, cidxs):
+        try:
+            return self.update_cursor_line(cidxs[0])
+        except TypeError:
+            if self.squeeze:
+                return self.update_cursor_point(cidxs)
+            else:
+                return self.update_cursor_line(cidxs)
+
+    def set_cursor(self, xdata, ydata, color, marker='o'):
         if not self.use_cursor:
             return
-        if self.squeeze or len(ydata) == 1:
-            xval = xdata[idx]
-            yval = ydata[idx]
-            if self.cursor is None:
-                self.cursor, = self.ax.plot([], [],
-                    marker='o',
-                    markersize=14,
-                    alpha=0.5,
-                    zorder=1,
-                )
-        else:
-            marker = None
-            xval = xdata
-            yval = ydata
-            if self.cursor is None:
-                self.cursor, = self.ax.plot([], [],
-                    linewidth=7,
-                    marker=None,
-                    markersize=14,
-                    alpha=0.5,
-                    zorder=1,
-                )
-        #~ if clen is None:
-            #~ cidx = self.clen - 1
-        #~ yval = self.task.get_value_from_path(self.ypath, cidx)
-
-        self.cursor.set_data([xval, yval])
+        if self.cursor is None:
+            self.cursor, = self.ax.plot([], [],
+                linewidth=7,
+                marker='o',
+                markersize=14,
+                alpha=0.5,
+                zorder=1,
+            )
+        self.cursor.set_marker(marker)
+        self.cursor.set_data([xdata, ydata])
         #~ self.cursor.set_color(shade_color(line.get_color(), 50))
         self.cursor.set_color(color)
         self.cursor.set_visible(True)
-        return yval if self.squeeze or len(ydata) == 1 else None
-
 
     @staticmethod
     def _shade_color(color, percent):
