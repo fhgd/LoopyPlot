@@ -666,6 +666,8 @@ class LineManager:
         for name, arg in self.task.args:
             if arg in self.squeeze:
                 key.append(None)
+            elif not self.squeeze and (arg is not self.ypath[0]):
+                key.append(None)
             else:
                 key.append(arg._cache[cidx])
         return tuple(key)
@@ -676,6 +678,8 @@ class LineManager:
             key = self.get_key(cidx)
             cidxs, xvals, yvals = datas.setdefault(key, ([], [], []))
             cidxs.append(cidx)
+            if yvals and not self.squeeze:
+                continue
             if self.xpath:
                 values = self.task.get_value_from_path(self.xpath, cidx)
                 xvals.append(values)
@@ -694,6 +698,8 @@ class LineManager:
             else:
                 line = self.lines[key]
                 self.cidxs[line].extend(cidxs)
+                if not self.squeeze:
+                    continue
 
             ydata = line.get_ydata()
             ydata = np.append(ydata, yvals)
