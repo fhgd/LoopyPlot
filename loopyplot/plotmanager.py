@@ -540,8 +540,14 @@ class PlotManager:
             cidx = cidxs[idx]
             _cidxs = cidx
         else:
-            cidx = cidxs[0]
-            _cidxs = cidxs
+            if len(cidxs) > 1:
+                cidx = cidxs[0]
+                _cidxs = cidxs
+            else:
+                cidx = cidxs[0]
+                _cidxs = cidx
+
+        lmngr.show_accumulate_lines(cidx)
 
         for task, confs in self.lms[lmngr.loc].items():
             if task is lmngr.task:
@@ -554,6 +560,16 @@ class PlotManager:
                 for lm in confs.values():
                     if lm.cursor is not None:
                         lm.cursor.set_visible(False)
+        """
+        def update_cursor(self, cidxs):
+            try:
+                return self.update_cursor_line(cidxs[0])
+            except TypeError:
+                if self.squeeze:
+                    return self.update_cursor_point(cidxs)
+                else:
+                    return self.update_cursor_line(cidxs)
+        """
 
         key = lmngr.get_key(cidx)
         for ax in self.axes[lmngr.loc].values():
@@ -571,24 +587,29 @@ class PlotManager:
                     label += ' = {}'.format(yval)
                 leg_labels.append(label)
             if ax is line.axes:
+                _params = []
                 arg_lines = []
-                params = []
+                # legend label for xvalue
                 if lm.xpath:
-                    params.append(lm.xpath[-1])
-                else:
-                    arg_lines.append('index = {}'.format(idx))
-                for state, (name, arg) in zip(key, lmngr.task.args):
-                    if arg not in params and len(arg._states) > 1 and state is not None:
-                        params.append(arg)
-                for arg in params:
-                    _name = arg.name.replace('_', '\_')
-                    val = arg.get_cache(cidx)
-                    if isinstance(val, Iterable) and not \
-                       isinstance(val, str):
-                        label = r'${} = \ldots$'.format(_name)
-                    else:
-                        label = r'${} = {:.7g}$'.format(_name, val)
+                    param = lm.xpath[-1]
+                    label = self._get_leg_label(param.name, xval)
                     arg_lines.append(label)
+                    _params.append(param)
+                else:
+                    label = 'index = {}'.format(idx)
+                    arg_lines.append(label)
+                for state, (name, arg) in zip(key, lmngr.task.args):
+                    #~ print('{}: state={}'.format(name, state))
+                    if arg not in _params and len(arg._states) > 1:
+                        if state is None:
+                            val = '_squeezed_'
+                            label = self._get_leg_label(arg.name, val)
+                            #~ arg_lines.append(label)
+                        else:
+                            val = arg.get_cache(cidx)
+                            label = self._get_leg_label(arg.name, val)
+                            arg_lines.append(label)
+                        _params.append(arg)
                 leg_lines.append(line)
                 leg_labels.append('\n'.join(arg_lines))
                 leg = ax.legend(leg_lines, leg_labels,
@@ -619,6 +640,17 @@ class PlotManager:
                               _lm=lmngr,
                               _line=line,
                               _idx=idx)
+
+    @staticmethod
+    def _get_leg_label(name, value):
+        name = name.replace('_', '\_')
+        if isinstance(value, str):
+            label = r'${}$ = {}'.format(name, value)
+        elif isinstance(value, Iterable):
+            label = r'${} = [{:.4g}, \ldots]$'.format(name, value[0])
+        else:
+            label = r'${} = {:.7g}$'.format(name, value)
+        return label
 
 
 class LineManager:
@@ -672,13 +704,17 @@ class LineManager:
         for name, arg in self.task.args:
             if arg in self.squeeze:
                 key.append(None)
-            elif not self.squeeze and (arg is not self.ypath[0]):
+            elif (not self.squeeze
+                  and arg is not self.ypath[0]
+                  and self.ypath[0] in self.task.args
+            ):
                 key.append(None)
             else:
                 key.append(arg._cache[cidx])
         return tuple(key)
 
     def update(self):
+        print('update: ypath={}'.format(self.ypath))
         datas = OrderedDict()   # key: cidxs, xvals, yvals
         for cidx in range(self.clen, self.task.clen):
             key = self.get_key(cidx)
@@ -748,8 +784,12 @@ class LineManager:
         #~ state = self.get_key(cidx)
         for key, line in self.lines.items():
             value = all(self.compare(key, state))
-            line.set_visible(value)
-            line.set_picker(10 if value else None)
+            self._show_line(line, value)
+
+    @staticmethod
+    def _show_line(line, value):
+        line.set_visible(value)
+        line.set_picker(10 if value else None)
 
     def compare(self, states, other):
         for s1, s2, m in zip(states, other, self.mask):
@@ -783,7 +823,14 @@ class LineManager:
 
     def update_cursor(self, cidxs):
         try:
-            return self.update_cursor_line(cidxs[0])
+            ln, yval = self.update_cursor_line(cidxs[0])
+            keys = set()
+            for cidx in cidxs:
+                keys.add(self.get_key(cidx))
+            for key in keys:
+                line = self.lines[key]
+                self._show_line(line, True)
+            return ln, yval
         except TypeError:
             if self.squeeze:
                 return self.update_cursor_point(cidxs)
