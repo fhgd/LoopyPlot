@@ -1398,8 +1398,11 @@ class ContainerNamespace:
     def __getitem__(self, name):
         return self._params[name]
 
-    def __contains__(self, name):
-        return (name in self._params)
+    def __contains__(self, value):
+        if isinstance(value, str):
+            return value in self._params.keys()
+        else:
+            return value in self._params.values()
 
     def __len__(self):
         return len(self._params)
