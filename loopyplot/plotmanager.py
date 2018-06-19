@@ -236,8 +236,7 @@ class PlotManager:
         view = self.views[task]
         if 'rotation' not in kwargs:
             kwargs['rotation'] = 'horizontal'
-        if 'horizontalalignment' not in kwargs or 'ha' not in kwargs:
-            kwargs['ha'] = 'right'
+            kwargs['horizontalalignment'] = 'right'
         if 'labelpad' not in kwargs:
             kwargs['labelpad'] = 0
         key = view, row, col, 'y'
@@ -286,6 +285,8 @@ class PlotManager:
                         if ylabel:
                             if args['rotation'] == 'horizotal':
                                 fmt = r'$\dfrac{{{}}}{{\mathsf{{{}}}}}$'
+                            elif '|' in ylabel:
+                                fmt = '{} / {}'
                             else:
                                 fmt = r'${}$ / {}'
                             ylabel = fmt.format(ylabel, yunit)
@@ -307,6 +308,8 @@ class PlotManager:
             view = self.views[task]
             locs += self.active.get(view, [])
             locs += self.active.get(None, [])
+        else:
+            return
 
         view_tasks = {task}
         if view != self.view and None in self.active:
@@ -529,114 +532,111 @@ class PlotManager:
         lmngr = self.lines[line]
         line.figure.canvas.flush_events()
 
-        legs = {}
-        xval = line.get_xdata()[idx]
-        yval = line.get_ydata()[idx]
-        lmngr.set_cursor(xval, yval, line.get_color(), 'o')
-        legs.setdefault(lmngr.ax, []).append([line, lmngr, yval])
-
-        cidxs = lmngr.cidxs[line]
-        if lmngr.squeeze:
-            cidx = cidxs[idx]
-            _cidxs = cidx
+        xval, yval, cidxs = lmngr.set_cursor_selection(line, idx)
+        # ypath legend
+        leg_lines = []
+        leg_labels = []
+        _params = set()
+        ylabel = self._path_to_label(lmngr.ypath, lmngr.task)
+        xlabel = self._path_to_label(lmngr.xpath, lmngr.task)
+        if xlabel and lmngr.xpath[-1].name in lmngr.task.returns:
+            label = '{}({}) = {:.7g}'.format(ylabel, xlabel, yval)
         else:
-            if len(cidxs) > 1:
-                cidx = cidxs[0]
-                _cidxs = cidxs
-            else:
-                cidx = cidxs[0]
-                _cidxs = cidx
+            label = '{} = {:.7g}'.format(ylabel, yval)
+        _params.add(lmngr.ypath[-1])
+        # xpath legend
+        if lmngr.xpath:
+            param = lmngr.xpath[-1]
+            label += '\n' + self._get_leg_label(param.name, xval)
+            _params.add(lmngr.xpath[-1])
+        else:
+            label += '\n' + 'index = {}'.format(idx)
+        leg_labels.append(label)
+        leg_lines.append(line)
+        # args legend
+        arg_labels = []
+        key = lmngr.get_key(cidxs[0])
+        for state, (name, arg) in zip(key, lmngr.task.args):
+            if arg not in _params and len(arg._states) > 1:
+                if state is None:
+                    val = '_squeezed_'
+                    label = self._get_leg_label(arg.name, val)
+                    #~ arg_labels.append(label)
+                else:
+                    val = arg.get_cache(cidxs[0])
+                    label = self._get_leg_label(arg.name, val)
+                    arg_labels.append(label)
+                _params.add(arg)
+        if arg_labels:
+            leg_lines.append(line)
+            leg_labels.append('\n'.join(arg_labels))
+        # create legend
+        leg = lmngr.ax.legend(leg_lines, leg_labels, loc=self.legend_loc)
+        if arg_labels:
+            ln = leg.legendHandles[-1]
+            ln.set_visible(False)
+            ln._legmarker.set_visible(False)
+        view = self.views[lmngr.task]
+        if len(self.tasks[view]) > 1:
+            leg.set_title(lmngr.task.name)
 
-        lmngr.show_accumulate_lines(cidx)
-
+        legs = {}
         for task, confs in self.lms[lmngr.loc].items():
             if task is lmngr.task:
                 for lm in confs.values():
                     if lm is lmngr:
                         continue
-                    ln, yval = lm.update_cursor(_cidxs)
-                    legs.setdefault(lm.ax, []).append([ln, lm, yval])
+                    lines = lm.set_selection(cidxs)
+                    lms = legs.setdefault(lm.ax, {})
+                    lms.setdefault(lm, {}).update(lines)
             else:
                 for lm in confs.values():
-                    if lm.cursor is not None:
-                        lm.cursor.set_visible(False)
-        """
-        def update_cursor(self, cidxs):
-            try:
-                return self.update_cursor_line(cidxs[0])
-            except TypeError:
-                if self.squeeze:
-                    return self.update_cursor_point(cidxs)
-                else:
-                    return self.update_cursor_line(cidxs)
-        """
+                    if lm._cursor is not None:
+                        lm._cursor.set_visible(False)
+                    for cursor in lm._selections:
+                        cursor.set_visible(False)
 
-        key = lmngr.get_key(cidx)
         for ax in self.axes[lmngr.loc].values():
+            if ax is line.axes:
+                continue
+            if ax not in legs:
+                leg = ax.get_legend()
+                if leg is not None:
+                    leg.remove()
+                continue
             leg_lines = []
             leg_labels = []
-            for ln, lm, yval in legs.get(ax, []):
+            for lm, lines in legs[ax].items():
                 ylabel = self._path_to_label(lm.ypath, lm.task)
                 xlabel = self._path_to_label(lm.xpath, lm.task)
-                leg_lines.append(ln)
                 if xlabel and lm.xpath[-1].name in lm.task.returns:
                     label = '{}({})'.format(ylabel, xlabel)
                 else:
                     label = ylabel
-                if yval is not None:
-                    label += ' = {}'.format(yval)
-                leg_labels.append(label)
-            if ax is line.axes:
-                _params = []
-                arg_lines = []
-                # legend label for xvalue
-                if lm.xpath:
-                    param = lm.xpath[-1]
-                    label = self._get_leg_label(param.name, xval)
-                    arg_lines.append(label)
-                    _params.append(param)
-                else:
-                    label = 'index = {}'.format(idx)
-                    arg_lines.append(label)
-                for state, (name, arg) in zip(key, lmngr.task.args):
-                    #~ print('{}: state={}'.format(name, state))
-                    if arg not in _params and len(arg._states) > 1:
-                        if state is None:
-                            val = '_squeezed_'
-                            label = self._get_leg_label(arg.name, val)
-                            #~ arg_lines.append(label)
-                        else:
-                            val = arg.get_cache(cidx)
-                            label = self._get_leg_label(arg.name, val)
-                            arg_lines.append(label)
-                        _params.append(arg)
-                leg_lines.append(line)
-                leg_labels.append('\n'.join(arg_lines))
-                leg = ax.legend(leg_lines, leg_labels,
-                                loc=self.legend_loc)
+                for num, (ln, xydata) in enumerate(lines.items()):
+                    leg_lines.append(ln)
+                    leg_labels.append('')
+                leg_labels[-1] = label
+                if num < 1 and len(xydata) < 2:
+                    xdata, ydata = xydata[0]
+                    #~ leg_labels[-1] += ' = {:.7g}'.format(ydata)
+                    if ydata is not None:
+                        leg_labels[-1] += ' = {}'.format(ydata)
+                        if not lm.xpath:
+                            xlabel = 'index'
+                        leg_labels[-1] += '\n{} = {}'.format(xlabel, xdata)
 
-                arg_line = leg.legendHandles[-1]
-                arg_line.set_visible(False)
-                arg_line._legmarker.set_visible(False)
-                view = self.views[lmngr.task]
-                if len(self.tasks[view]) > 1:
-                    leg.set_title(lmngr.task.name)
-            elif leg_lines:
-                leg = ax.legend(leg_lines, leg_labels,
-                                loc=self.legend_loc)
-                view = self.views[lmngr.task]
-                if len(self.tasks[view]) > 1:
-                    leg.set_title(lmngr.task.name)
-            else:
-                leg = ax.get_legend()
-                if leg is not None:
-                    leg.remove()
+            leg = ax.legend(leg_lines, leg_labels, loc=self.legend_loc)
+            view = self.views[lmngr.task]
+            if len(self.tasks[view]) > 1:
+                leg.set_title(lm.task.name)
+
         fig = line.get_figure()
         fig.canvas.draw()
         #~ fig.canvas.flush_events()
 
         self.selection = dict(task=lmngr.task,
-                              cidx=cidx,
+                              cidxs=cidxs,
                               _lm=lmngr,
                               _line=line,
                               _idx=idx)
@@ -697,6 +697,76 @@ class LineManager:
         self.clen = 0
 
         self.cursor = None
+        self._selections = []
+        self._cursor = None
+
+    def create_cursor(self):
+        cursor, = self.ax.plot([], [],
+            linewidth=7,
+            marker='o',
+            markersize=14,
+            alpha=0.5,
+            zorder=1,
+        )
+        return cursor
+
+    def set_cursor_selection(self, line, idx=-1):
+        xval = line.get_xdata()[idx]
+        yval = line.get_ydata()[idx]
+        if self._cursor is None:
+            self._cursor = self.create_cursor()
+        cursor = self._cursor
+        cursor.set_data([xval, yval])
+        cursor.set_marker('o')
+        color = line.get_color()
+        cursor.set_color(color)  # or: shade_color(color, 50)
+        cursor.set_visible(True)
+
+        cidxs = self.cidxs[line]
+        if self.squeeze:
+            cidxs = [cidxs[idx]]
+        self.show_accumulate_lines(cidxs[0])
+        for cursor in self._selections:
+            cursor.set_visible(False)
+        return xval, yval, cidxs
+
+    def set_selection(self, cidxs):
+        lines = {}
+        self.show_accumulate_lines(cidxs)
+        for num, cidx in enumerate(cidxs):
+            key = self.get_key(cidx)
+            line = self.lines[key]
+            self._show_line(line, True)
+            if not self.squeeze and not any(self.mask):
+                lines.setdefault(line, []).append((None, None))
+                continue
+            try:
+                cursor = self._selections[num]
+            except IndexError:
+                cursor = self.create_cursor()
+                self._selections.append(cursor)
+            if self.squeeze:
+                line_cidxs = self.cidxs[line]
+                idx = line_cidxs.index(cidx)
+                xdata = line.get_xdata()[idx]
+                ydata = line.get_ydata()[idx]
+                cursor.set_marker('o')
+                cursor.set_linestyle('')
+            else:
+                xdata = line.get_xdata()
+                ydata = line.get_ydata()
+                cursor.set_marker(None)
+                cursor.set_linestyle('-')
+            cursor.set_data([xdata, ydata])
+            color = line.get_color()
+            cursor.set_color(color)  # or: shade_color(color, 50)
+            cursor.set_visible(True)
+            lines.setdefault(line, []).append((xdata, ydata))
+        for cursor in self._selections[num+1:]:
+            cursor.set_visible(False)
+        if self._cursor:
+            self._cursor.set_visible(False)
+        return lines
 
     def get_key(self, cidx):
         # ToDo: results could be cached, maybe in self._keys (cidx: key)
@@ -714,7 +784,6 @@ class LineManager:
         return tuple(key)
 
     def update(self):
-        print('update: ypath={}'.format(self.ypath))
         datas = OrderedDict()   # key: cidxs, xvals, yvals
         for cidx in range(self.clen, self.task.clen):
             key = self.get_key(cidx)
@@ -755,12 +824,7 @@ class LineManager:
             line.set_xdata(xdata)
 
         if len(ydata):
-            #~ self.set_cursor(xdata, ydata, line.get_color())
-            if self.squeeze:
-                self.update_cursor_point(cidx)
-            else:
-                self.update_cursor_line(cidx)
-
+            self.set_cursor_selection(line)
 
         self.clen = self.task.clen
 
@@ -779,11 +843,18 @@ class LineManager:
         line, = self.ax.plot([], [], **kwargs)
         return line
 
-    def show_accumulate_lines(self, cidx):
-        state = [arg._cache[cidx] for n, arg in self.task.args]
+    def show_accumulate_lines(self, cidxs):
+        if not isinstance(cidxs, (list, tuple)):
+            cidxs = [cidxs]
+        states = []
+        for cidx in cidxs:
+            state = [arg._cache[cidx] for n, arg in self.task.args]
+            states.append(state)
         #~ state = self.get_key(cidx)
         for key, line in self.lines.items():
-            value = all(self.compare(key, state))
+            value = 0
+            for state in states:
+                value |= all(self.compare(key, state))
             self._show_line(line, value)
 
     @staticmethod
@@ -797,62 +868,6 @@ class LineManager:
                 yield True
             else:
                 yield m or s1 == s2
-
-    def update_cursor_line(self, cidx):
-        #~ print('update cursor with cidx =', cidx)
-        key = self.get_key(cidx)
-        line = self.lines[key]
-        xdata, ydata = line.get_data()
-        yval = self.set_cursor(xdata, ydata, line.get_color(), None)
-        self.show_accumulate_lines(cidx)
-        if not self.squeeze and not any(self.mask):
-            self.cursor.set_visible(False)
-        return line, yval
-
-    def update_cursor_point(self, cidx):
-        #~ print('update cursor with cidx =', cidx)
-        key = self.get_key(cidx)
-        line = self.lines[key]
-        cidxs = self.cidxs[line]
-
-        idx = cidxs.index(cidx)
-        xdata, ydata = line.get_data()
-        yval = self.set_cursor(xdata[idx], ydata[idx], line.get_color(), 'o')
-        self.show_accumulate_lines(cidx)
-        return line, yval
-
-    def update_cursor(self, cidxs):
-        try:
-            ln, yval = self.update_cursor_line(cidxs[0])
-            keys = set()
-            for cidx in cidxs:
-                keys.add(self.get_key(cidx))
-            for key in keys:
-                line = self.lines[key]
-                self._show_line(line, True)
-            return ln, yval
-        except TypeError:
-            if self.squeeze:
-                return self.update_cursor_point(cidxs)
-            else:
-                return self.update_cursor_line(cidxs)
-
-    def set_cursor(self, xdata, ydata, color, marker='o'):
-        if not self.use_cursor:
-            return
-        if self.cursor is None:
-            self.cursor, = self.ax.plot([], [],
-                linewidth=7,
-                marker='o',
-                markersize=14,
-                alpha=0.5,
-                zorder=1,
-            )
-        self.cursor.set_marker(marker)
-        self.cursor.set_data([xdata, ydata])
-        #~ self.cursor.set_color(shade_color(line.get_color(), 50))
-        self.cursor.set_color(color)
-        self.cursor.set_visible(True)
 
     @staticmethod
     def _shade_color(color, percent):
@@ -873,87 +888,3 @@ if __name__ == '__main__':
     doctest.testmod(
         optionflags=doctest.NORMALIZE_WHITESPACE | doctest.ELLIPSIS)
     utils.enable_logger(log, format='short')
-
-    from looping import Task
-
-    @Task
-    def sigma():
-        value = 0.1
-        return value
-    sigma.run()
-
-    @Task
-    def offs(x, sigma=0.1):
-        y = x * np.random.normal(1, sigma)
-        return y
-
-    offs.args.x.sweep(0, 5)
-    offs.args.sigma.depends_on(sigma.returns.value)
-    offs.run(0)
-    offs.run(0)
-    offs.run(0)
-
-    @Task
-    def t1(x: 'cm'):
-        y: 'kg' = (x**3 - 0.5*x) * 10
-        return y
-    t1.args.x.sweep(-1, 1, num=9)
-    t1.run()
-
-    @Task
-    def t2(x: 'cm', m=1, offs=0):
-        y: 'kg' = m*x + offs
-        return y
-    t2.args.m.value = 10
-    t2.args.x.sweep(-1, 1, num=5)
-    t2.run()
-
-    @Task
-    def t3(x: 'cm', m=0.1, offs: 'V' = 0, values=[]):
-        y: 'V' = m * x**2 + offs
-        _x = 0.8*np.array([0, 1, 1, 0, 0]) + x
-        _y: 'V' = 4*np.array([0, 0, 1, 1, 0]) + offs
-        return y, _x, _y
-    t3.args.x.sweep(0, 5)
-    #~ t3.args.offs.iterate(0, 10, 20)
-    t3.args.offs.depends_on(t2.returns.y, sweeps='x')
-    t3.args.values.depends_on(t2.returns.y, squeeze='x', sweeps='x')
-    t3.args.zip('offs', 'values')
-    t3.run()
-
-    #~ t3.run(0)
-    #~ t3.run()
-
-    pm = PlotManager()
-
-    pm.plot(t1, x='x', y=t1.returns.y, squeeze=t1.args.x)
-    pm.plot(t2, x='x', y=t2.returns.y, squeeze='x')
-    pm.plot(t2, x='x', y=t2.returns.y, squeeze='x', row=1)
-    pm.join_views(t1, t2)
-    #~ pm.xlabel('x', t1)
-    #~ pm.xlabel('x', t1)
-    #~ pm.ylabel('y', t1)
-    #~ pm.xlabel('x', t2, row=1)
-
-    pm.plot(t3, y=t3.returns.y, squeeze='x')
-    #~ pm.plot(t3, y=t3.args.offs, squeeze='x')
-    #~ pm.xlabel('index', t3)
-
-    #~ pm.plot(t3, x='x', y=t3.args.offs, squeeze='x', col=1)
-    #~ pm.plot(t3, x='x', y=t2.returns.y, squeeze='x', col=1)
-    pm.plot(t3, x='x', y=[t2.args.x, 'offs'], squeeze='x', col=1)
-
-    pm.plot(t3, x='x', y=t3.returns.y, row=1, col=0, color='r')
-    pm.plot(t3, x='_x', y='_y', row=1, col=1, accumulate='offs')
-
-    #~ pm.disable()
-    #~ pm.enable(0)
-    #~ pm.enable(1)
-
-"""
-    pm.plot(task1, 'x', 'y', squeeze='x', col=1)
-    pm.plot(task1, 'x', 'z', squeeze='x', row=2)
-
-    pm.plot(task2, 'x', 'out', squeeze='x', row=None)
-    pm.join_views(task1, task2)
-"""
