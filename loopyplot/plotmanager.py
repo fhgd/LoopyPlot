@@ -525,6 +525,16 @@ class PlotManager:
             label.append(s)
         return ' | '.join(label)
 
+    @staticmethod
+    def _value_str(value):
+        if isinstance(value, str):
+            return value
+        elif isinstance(value, (int, float, complex)):
+            return '{:.7g}'.format(value)
+        elif isinstance(value, Iterable):
+            return r'$[{:.4g}, \ldots]$'.format(value[0])
+        else:
+            return repr(value)
 
     def on_pick(self, event):
         idx = event.ind[0]
@@ -539,18 +549,20 @@ class PlotManager:
         _params = set()
         ylabel = self._path_to_label(lmngr.ypath, lmngr.task)
         xlabel = self._path_to_label(lmngr.xpath, lmngr.task)
+        yval_str = self._value_str(yval)
         if xlabel and lmngr.xpath[-1].name in lmngr.task.returns:
-            label = '{}({}) = {:.7g}'.format(ylabel, xlabel, yval)
+            label = '{}({}) = {}'.format(ylabel, xlabel, yval_str)
         else:
-            label = '{} = {:.7g}'.format(ylabel, yval)
+            label = '{} = {}'.format(ylabel, yval_str)
         _params.add(lmngr.ypath[-1])
         # xpath legend
         if lmngr.xpath:
             param = lmngr.xpath[-1]
-            label += '\n' + self._get_leg_label(param.name, xval)
+            name = param.name.replace('_', '\_')
+            label += '\n${}$ = {}'.format(name, self._value_str(xval))
             _params.add(lmngr.xpath[-1])
         else:
-            label += '\n' + 'index = {}'.format(idx)
+            label += '\n' 'index = {}'.format(idx)
         leg_labels.append(label)
         leg_lines.append(line)
         # args legend
@@ -559,12 +571,15 @@ class PlotManager:
         for state, (name, arg) in zip(key, lmngr.task.args):
             if arg not in _params and len(arg._states) > 1:
                 if state is None:
-                    val = '_squeezed_'
-                    label = self._get_leg_label(arg.name, val)
+                    name = arg.name.replace('_', '\_')
+                    val_str = '_squeezed_'
+                    label = '${}$ = {}'.format(name, val_str)
                     #~ arg_labels.append(label)
                 else:
+                    name = arg.name.replace('_', '\_')
                     val = arg.get_cache(cidxs[0])
-                    label = self._get_leg_label(arg.name, val)
+                    val_str = self._value_str(val)
+                    label = '${}$ = {}'.format(name, val_str)
                     arg_labels.append(label)
                 _params.add(arg)
         if arg_labels:
@@ -621,10 +636,13 @@ class PlotManager:
                     xdata, ydata = xydata[0]
                     #~ leg_labels[-1] += ' = {:.7g}'.format(ydata)
                     if ydata is not None:
-                        leg_labels[-1] += ' = {}'.format(ydata)
+                        ydata_str = self._value_str(ydata)
+                        leg_labels[-1] += ' = {}'.format(ydata_str)
                         if not lm.xpath:
                             xlabel = 'index'
-                        leg_labels[-1] += '\n{} = {}'.format(xlabel, xdata)
+                        xdata_str = self._value_str(xdata)
+                        leg_labels[-1] += '\n{} = {}'.format(xlabel,
+                                                             xdata_str)
 
             leg = ax.legend(leg_lines, leg_labels, loc=self.legend_loc)
             view = self.views[lmngr.task]
@@ -640,17 +658,6 @@ class PlotManager:
                               _lm=lmngr,
                               _line=line,
                               _idx=idx)
-
-    @staticmethod
-    def _get_leg_label(name, value):
-        name = name.replace('_', '\_')
-        if isinstance(value, str):
-            label = r'${}$ = {}'.format(name, value)
-        elif isinstance(value, Iterable):
-            label = r'${} = [{:.4g}, \ldots]$'.format(name, value[0])
-        else:
-            label = r'${} = {:.7g}$'.format(name, value)
-        return label
 
 
 class LineManager:
