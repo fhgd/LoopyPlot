@@ -45,8 +45,8 @@ an experiment from its administration (all the seven point above). A very
 natural way of splitting is to use a function. Everything inside the
 function describes the specific experiment. The function arguments and
 return values are used for the administration of the experiment.
-In this sense LoopyPlot is a dependency injection container for
-looped functions.
+In this sense LoopyPlot is a dependency injection (DI) container for
+looped functions with plotting evaluation of the results.
 
 LoopyPlot is a prototype implementation of the seven administration
 points above in order the write readable experiments.
@@ -157,10 +157,8 @@ Configuration of function arguments:
 PlotManager:
 * live update during a running task loop
 * data cursor which highlights the relations between different plots
-* manage multiple views
+* manage multiple plot-views
 * each view can be shown in one or multiple windows
-* by default each task plot its results in its own view
-* the default window shows the view from the current task
 
 
 
