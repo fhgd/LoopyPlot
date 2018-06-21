@@ -55,7 +55,7 @@ points above in order the write readable experiments.
 Short Demo
 -----------
 
-The following basic steps are shown by means of the nice lissajous curves:
+The following basic steps are shown by means of the nice lissajous example:
 
 * Configure the function arguments either with constant values or loops
 * Run the nested loops
@@ -106,7 +106,7 @@ The matplotlib figure has an interactive data cursor.
 
 ![Lissajous](./examples/lissajous.gif)
 
-You can click at any point (in the lower right axes) in order to
+You can click at any point (e.g. in the lower right axes) in order to
 update the data cursor and explore the relations between the plots.
 
 
