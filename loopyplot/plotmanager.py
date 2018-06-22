@@ -18,13 +18,14 @@ class PlotManager:
         self.labels = {}    # view, row, col, 'x/y': 'xylabel', kwargs
         self.active = {}    # view: [loc, ...]
         self.windows = {}   # window: None or figure
+        self.xyparams = {}   # view, row, col: [params]
 
         # used for caching
         self.lms = {}       # loc: task: config-idx: lm
         self.axes = {}      # loc: (row, col): ax
         self.lines = {}     # line: lm
         self.tasks = {}     # view: [task, ...]
-
+        self.ax_params = {} # param: ax
         # ToDo: change axes for current view
         self.enable(None)
 
@@ -174,6 +175,14 @@ class PlotManager:
                         log.error(msg)
                         #~ raise ValueError(msg)
 
+                # join xparams
+                keys = [key for key in self.xyparams if key[0] == oldview]
+                for oldkey in keys:
+                    _oldview, row, col, xy = oldkey
+                    newkey = newview, row, col, xy
+                    params = self.xyparams.pop(oldkey)
+                    self.xyparams.setdefault(newkey, []).extend(params)
+
     def plot(self, task, x='', y='', squeeze='', accumulate=None,
              row=0, col=0, use_cursor=True, **kwargs):
         if task not in self.views:
@@ -211,6 +220,14 @@ class PlotManager:
         )
         config = row, col, LineManager, args
         self.configs.setdefault(task, []).append(config)
+
+        # set xyparams
+        if xpath:
+            key = view, row, col, 'x'
+            self.xyparams.setdefault(key, []).append(xpath[-1])
+        key = view, row, col, 'y'
+        self.xyparams.setdefault(key, []).append(ypath[-1])
+
         #~ self.update(task)
 
     def xlabel(self, task, label, unit=None, row=0, col=0, **kwargs):
@@ -391,12 +408,24 @@ class PlotManager:
         try:
             return self.axes[loc][row, col]
         except KeyError:
-            ax = self.create_axis(view, loc, row, col)
+            xparams = self.xyparams.get((view, row, col, 'x'), [])
+            xparam = xparams[0] if len(xparams) == 1 else None
+            xax = self.ax_params.get((xparam, 'x'), None)
+
+            yparams = self.xyparams.get((view, row, col, 'y'), [])
+            yparam = yparams[0] if len(yparams) == 1 else None
+            yax = self.ax_params.get((yparam, 'y'), None)
+
+            ax = self.create_axis(view, loc, row, col, xax=xax, yax=yax)
             loc_axes = self.axes.setdefault(loc, {})
             loc_axes[row, col] = ax
+            if xparam is not None and xax is None:
+                self.ax_params[xparam, 'x'] = ax
+            if yparam is not None and yax is None:
+                self.ax_params[yparam, 'y'] = ax
             return ax
 
-    def create_axis(self, view, loc, row, col):
+    def create_axis(self, view, loc, row, col, xax=None, yax=None):
         try:
             axes = list(self.axes[loc].values())
             ax = axes[0]
@@ -424,7 +453,7 @@ class PlotManager:
         subspec = gs[slice(*ridx), slice(*cidx)]
         fig = self.open_window(loc[0])
         fig.canvas.set_window_title(self.get_window_title(loc[0]))
-        ax = fig.add_subplot(subspec)
+        ax = fig.add_subplot(subspec, sharex=xax, sharey=yax)
         try:
             xlabel, xunit, kwargs = self.labels[view, row, col, 'x']
             if xunit:

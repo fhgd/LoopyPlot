@@ -637,7 +637,7 @@ class ReturnValue:
         return self._task.nested.idx
 
     def __len__(self):
-        return len(self._task.nested)
+        return len(self._task.args._nested)
 
     @property
     def value(self):
