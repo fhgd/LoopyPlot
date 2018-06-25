@@ -630,7 +630,11 @@ class PlotManager:
                 for lm in confs.values():
                     if lm is lmngr:
                         continue
-                    lines = lm.set_selection(cidxs)
+                    if lmngr.xpath and lmngr.xpath == lm.xpath:
+                        ln_idx = idx
+                    else:
+                        ln_idx = None
+                    lines = lm.set_selection(cidxs, ln_idx)
                     lms = legs.setdefault(lm.ax, {})
                     lms.setdefault(lm, {}).update(lines)
             else:
@@ -766,14 +770,17 @@ class LineManager:
             cursor.set_visible(False)
         return xval, yval, cidxs
 
-    def set_selection(self, cidxs):
+    def set_selection(self, cidxs, ln_idx=None):
         lines = {}
         self.show_accumulate_lines(cidxs)
         for num, cidx in enumerate(cidxs):
             key = self.get_key(cidx)
             line = self.lines[key]
             self._show_line(line, True)
-            if not self.squeeze and not any(self.mask):
+            if (not self.squeeze
+                and not any(self.mask)
+                and ln_idx is None
+            ):
                 lines.setdefault(line, []).append((None, None))
                 continue
             try:
@@ -786,6 +793,11 @@ class LineManager:
                 idx = line_cidxs.index(cidx)
                 xdata = line.get_xdata()[idx]
                 ydata = line.get_ydata()[idx]
+                cursor.set_marker('o')
+                cursor.set_linestyle('')
+            elif ln_idx is not None:
+                xdata = line.get_xdata()[ln_idx]
+                ydata = line.get_ydata()[ln_idx]
                 cursor.set_marker('o')
                 cursor.set_linestyle('')
             else:
