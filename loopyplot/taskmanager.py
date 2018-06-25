@@ -2347,6 +2347,17 @@ class Task(BaseSweepIterator):
                     msg = 'task {} != {}'.format(task, arg._task)
                     raise ValueError(msg)
                 cidx = arg.get_depend_cidx(cidx)
+                # guess:
+                #   if cidx is list, then arg has a squeezed dependency
+                # ToDo:
+                #   fold cidx if next arg is in squeezed arg._task.args
+                #   but is NOT the squeezed arg itself
+            if isinstance(cidx, list):
+                for sq_arg in arg._get_squeezed_args():
+                    if (path[-1] in sq_arg._task.args
+                        and path[-1] is not sq_arg
+                    ):
+                        cidx = cidx[0]
             return path[-1].get_cache(cidx)
 
     # ToDo: should be in task.args
