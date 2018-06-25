@@ -576,7 +576,8 @@ class ConcatPointer(BaseSweepIterator):
 
     def reset(self):
         for ptr in self._pointers:
-            ptr.sweep.reset()
+            if hasattr(ptr, 'sweep') or 1:
+                ptr.sweep.reset()
         self._iptr = 0
         self._is_initialized = True
 
