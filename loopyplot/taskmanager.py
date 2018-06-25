@@ -2917,7 +2917,12 @@ class TaskManager:
                 self.next_value(loglevel)
                 if plot_update:
                     self._task_current.plot_update()
-        self._task_current.plot_update()
+        if not plot_update:
+            if num is None or num < -1:
+                for name, task in self.tasks:
+                    task.plot_update()
+            else:
+                self._task_current.plot_update()
         plotmanager.log.level = plevel
 
     def _get_sweeps(self, num):
