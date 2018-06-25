@@ -1734,16 +1734,20 @@ class ReturnParams(Parameters):
             lines.append(line)
         return '\n'.join(lines)
 
-    def as_table(self, cidx=None, include=[], hide_const=False,
-                 as_df=True):
+    def as_table(self, include_args=False, include=[], hide_const=False,
+                 as_df=True, cidx=None):
         if isinstance(cidx, int):
             cidx = [cidx]
         params = OrderedDict()
 
-        for name, arg in self._task.args:
-            arg_keys = arg._states.keys()
-            if not hide_const or len(arg_keys) > 1 or self._task.clen < 2:
-                params[arg._uname] = arg.get_cache(cidx)
+        if include_args:
+            for name, arg in self._task.args:
+                arg_keys = arg._states.keys()
+                if (not hide_const
+                    or len(arg_keys) > 1
+                    or self._task.clen < 2
+                ):
+                    params[arg._uname] = arg.get_cache(cidx)
         for name, result in self._task.returns:
             params[result._uname] = result.get_cache(cidx)
         for param in include:
