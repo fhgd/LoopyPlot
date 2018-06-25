@@ -2293,9 +2293,22 @@ class Task(BaseSweepIterator):
                     try:
                         arg = via.intersection(args).pop()
                     except KeyError:
-                        msg = 'no hint in via_args for depending ' \
-                              'arguments {} of task {}'
-                        raise ValueError(msg.format(args, task))
+                        # workaround:
+                        # try to avoid via_args if multiple arguments
+                        # depends in the same way on an other task
+                        # => check if these args have the same nested
+                        # levels
+                        levels = {}
+                        for _arg in args:
+                            _task = _arg._task
+                            level = _task.args._nested_args[_arg]
+                            levels.setdefault(_task, set()).add(level)
+                        if len(levels) == 1 and len(levels[_task]) == 1:
+                            arg = args[0]
+                        else:
+                            msg = 'no hint in via_args for depending ' \
+                                  'arguments {} of task {}'
+                            raise ValueError(msg.format(args, task))
                 else:
                     arg = args[0]
                 params.insert(0, arg)
