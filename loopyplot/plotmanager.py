@@ -635,6 +635,7 @@ class PlotManager:
                     else:
                         ln_idx = None
                     lines = lm.set_selection(cidxs, ln_idx)
+
                     lms = legs.setdefault(lm.ax, {})
                     lms.setdefault(lm, {}).update(lines)
             else:
@@ -782,6 +783,7 @@ class LineManager:
                 and ln_idx is None
             ):
                 lines.setdefault(line, []).append((None, None))
+                num = num - 1
                 continue
             try:
                 cursor = self._selections[num]
