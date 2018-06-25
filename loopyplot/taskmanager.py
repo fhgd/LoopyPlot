@@ -667,7 +667,8 @@ class ReturnValue:
                 param, via = param[0], param[1:]
             else:
                 via = []
-            values = self._task.get_param_cache(param, via, idxs)
+            path = self._task.get_path(param, via)
+            values = self._task.get_value_from_path(path, idxs)
             name = '{}.{}.{}'.format(
                 param._task.name,
                 'args' if isinstance(param, Argument) else 'results',
@@ -1550,7 +1551,8 @@ class ArgumentParams(Parameters):
                 param, via = param[0], param[1:]
             else:
                 via = []
-            values = self._task.get_param_cache(param, via, cidx)
+            path = self._task.get_path(param, via)
+            values = self._task.get_value_from_path(path, cidx)
             name = '{}.{}.{}'.format(
                 param._task.name,
                 'args' if isinstance(param, Argument) else 'results',
@@ -1767,7 +1769,8 @@ class ReturnParams(Parameters):
                 via = self._task.args._get(via)
             else:
                 via = []
-            values = self._task.get_param_cache(param, via, cidx)
+            path = self._task.get_path(param, via)
+            values = self._task.get_value_from_path(path, cidx)
             name = '{}.{}.{}'.format(
                 param._task.name,
                 'args' if isinstance(param, Argument) else 'results',
@@ -2247,22 +2250,23 @@ class Task(BaseSweepIterator):
         1  [3, 63]   2  [5, 65]
         2  [3, 63]   3  [6, 66]
 
-        >>> four.get_param_cache(three.args.x1, cidx=2)
+        >>> four.get_value_from_path([three.args.x1], cidx=2)
         array([ 0, 10])
 
-        >>> four.get_param_cache(three.args.x2, cidx=2)
+        >>> four.get_value_from_path([three.args.x2], cidx=2)
         array([1, 2, 3])
 
-        >>> four.get_param_cache(two.args.offs, cidx=2)
+        >>> four.get_value_from_path([two.args.offs], cidx=2)
         [0, 10]
 
-        >>> four.get_param_cache(two.returns.y, cidx=2)
+        >>> four.get_value_from_path([two.returns.y], cidx=2)
         [array([1, 4, 9]), array([11, 14, 19])]
 
-        >>> four.get_param_cache(two.args.x, cidx=2)
+        >>> four.get_value_from_path([two.args.x], cidx=2)
         [array([1, 2, 3]), array([1, 2, 3])]
 
-        >>> four.get_param_cache(one.args.x, via=[two.args.x], cidx=[1, 2])
+        >>> path = [(one.args.x, two.args.x)]
+        >>> four.get_value_from_path(path, cidx=[1, 2])
         [[[0, 1, 2], [0, 1, 2]], [[0, 1, 2], [0, 1, 2]]]
         """
         tasks = OrderedDict()
@@ -2313,24 +2317,6 @@ class Task(BaseSweepIterator):
             return self.get_path(param, via)
         else:
             return self.get_path(value)
-
-    # ToDo: should be in self.args
-    def get_param_cache(self, param, via=[], cidx=None):
-        if cidx is None:
-            cidx = range(self.clen)
-        try:
-            return [self.get_param_cache(param, via, idx) for idx in cidx]
-        except TypeError:
-            path = self.get_path(param, via)
-            task = path[0]._task
-            for arg in path[:-1]:
-                if task == arg._task:
-                    task = arg._ptr.task
-                else:
-                    msg = 'task {} != {}'.format(task, arg._task)
-                    raise ValueError(msg)
-                cidx = arg.get_depend_cidx(cidx)
-            return path[-1].get_cache(cidx)
 
     # ToDo: should be in self.args
     def get_value_from_path(self, path, cidx=None):
