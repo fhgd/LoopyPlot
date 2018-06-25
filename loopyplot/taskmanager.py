@@ -965,8 +965,13 @@ class ParamSweepPointer:
             msg = msg.format(self.task, self.task.name)
             log.warning(msg)
             return np.nan
+        if not cidxs:
+            return np.nan
         cidx = cidxs[sidx]
-        return self._param.get_cache(cidx)
+        if isinstance(cidx, list):
+            return np.array(self._param.get_cache(cidx))
+        else:
+            return self._param.get_cache(cidx)
 
     @property
     def value(self):
