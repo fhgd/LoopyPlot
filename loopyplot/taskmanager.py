@@ -1753,6 +1753,7 @@ class ReturnParams(Parameters):
         for param in include:
             if isinstance(param, (list, tuple)):
                 param, via = param[0], param[1:]
+                via = self._task.args._get(via)
             else:
                 via = []
             values = self._task.get_param_cache(param, via, cidx)
