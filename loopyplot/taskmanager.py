@@ -1544,6 +1544,12 @@ class ArgumentParams(Parameters):
     def _reset(self):
         self._nested.reset()
 
+    def _is_running(self):
+        return self._nested.is_running()
+
+    def _is_finished(self):
+        return not self._is_running()
+
     def as_table(self, cidx=None, include=[], hide_const=False,
                  as_df=True):
         if isinstance(cidx, int):
@@ -2005,6 +2011,8 @@ class Task(BaseSweepIterator):
         self.clen = 0
         for name, param in self.params:
             param._reset()
+        if self._pm:
+            self._pm._reset()
 
     def __repr__(self):
         return '<{}>'.format(self.name)
@@ -2144,18 +2152,20 @@ class Task(BaseSweepIterator):
         return self.value
 
     def run(self, num=None, inner=False, plot_update=False):
-        """run the sweeps of the task
+        """run the loops of the task
 
         task.run()           run until task is finished
 
-        task.run(0)          task.next_value()
+        task.run(0)          one single loop step
 
-        task.run(1)          next value of second sweep until
-                             inner sweeps are finished
+        task.run(1)          next value of second loop until
+                             inner loops are finished
 
-        task.run(1, True)    next value of second sweep until
-                             the same inner sweep idx
+        task.run(1, True)    next value of second loop until
+                             the same inner loop idx
         """
+        if num is None and self.args._is_finished():
+            self.reset()
         self.args._configure()
         plevel = plotmanager.log.level
         plotmanager.log.setLevel('WARNING')
@@ -2178,8 +2188,9 @@ class Task(BaseSweepIterator):
                 self.next_value(loglevel=num)
                 if plot_update:
                     self.plot_update()
+        if not plot_update:
+            self.plot_update()
         plotmanager.log.level = plevel
-        self.plot_update()
 
     @property
     def depend_tasks(self):
