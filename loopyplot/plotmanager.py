@@ -300,7 +300,7 @@ class PlotManager:
                     if yunit:
                         ylabel = ylabel.replace('$', '')
                         if ylabel:
-                            if args['rotation'] == 'horizotal':
+                            if args['rotation'] == 'horizontal':
                                 fmt = r'$\dfrac{{{}}}{{\mathsf{{{}}}}}$'
                             elif '|' in ylabel:
                                 fmt = '{} / {}'
