@@ -1753,7 +1753,7 @@ class ReturnParams(Parameters):
             lines.append(line)
         return '\n'.join(lines)
 
-    def as_table(self, include_args=False, include=[], hide_const=False,
+    def as_table(self, include_args=True, include=[], hide_const=False,
                  as_df=True, cidx=None):
         if isinstance(cidx, int):
             cidx = [cidx]
