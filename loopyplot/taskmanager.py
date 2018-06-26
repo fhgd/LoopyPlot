@@ -591,6 +591,21 @@ class ConcatPointer(BaseSweepIterator):
             args=', '.join(args))
 
 
+def _value_str(value):
+    if isinstance(value, str):
+        return value
+    elif isinstance(value, (int, float, complex)):
+        return '{:.7g}'.format(value)
+    elif isinstance(value, list):
+        return '[{:.4g}, ...]'.format(value[0])
+    elif isinstance(value, tuple):
+        return '({:.4g}, ...)'.format(value[0])
+    elif isinstance(value, np.ndarray):
+        return 'array([{:.4g}, ...])'.format(value[0])
+    else:
+        return repr(value)
+
+
 class ReturnValue:
     def __init__(self, name, unit=None, task=None):
         self.name = name
@@ -1465,10 +1480,10 @@ class ArgumentParams(Parameters):
 
     def __repr__(self):
         maxlen = max([0] + [len(param._uname) for name, param in self])
-        fmtstr = '{{:>{maxlen}}} = {{!r}}'.format(maxlen=maxlen)
+        fmtstr = '{{:>{maxlen}}} = {{}}'.format(maxlen=maxlen)
         lines = []
         for name, param in self:
-            line = fmtstr.format(param._uname, param.value)
+            line = fmtstr.format(param._uname, _value_str(param.value))
             ptr = param._ptr
             if isinstance(ptr, (SweepPointer, SweepFactoryPointer)):
                 if len(param._ptrs._pointers) == 1:
@@ -1752,10 +1767,10 @@ class ArgumentParams(Parameters):
 class ReturnParams(Parameters):
     def __repr__(self):
         maxlen = max([0] + [len(param._uname) for name, param in self])
-        fmtstr = '{{:>{maxlen}}} = {{!r}}'.format(maxlen=maxlen)
+        fmtstr = '{{:>{maxlen}}} = {{}}'.format(maxlen=maxlen)
         lines = []
         for name, param in self:
-            line = fmtstr.format(param._uname, param.value)
+            line = fmtstr.format(param._uname, _value_str(param.value))
             lines.append(line)
         return '\n'.join(lines)
 
@@ -2006,6 +2021,8 @@ class Task(BaseSweepIterator):
         self._config = []
         self._tm = _tm
 
+        self._logline = ''
+
     def reset(self):
         self.args._reset()
         self.clen = 0
@@ -2037,7 +2054,6 @@ class Task(BaseSweepIterator):
 
     def _call(self, loglevel=0):
         kwargs = {}             # name: value   for self.func(**kwargs)
-        sweeped_lines = {}      # level: line   for logging
         const_lines = []        # line          for logging
         for name, arg in self.args:
             value = arg.value
@@ -2045,29 +2061,9 @@ class Task(BaseSweepIterator):
             arg._capture_idx()
             # logging
             ptr = arg._ptr
-            levels = sorted(self.args._nested_args.values())
-            if arg in self.args._nested_args and loglevel is not None:
-                level = self.args._nested_args[arg]
-                if loglevel and loglevel <= levels.index(level):
-                    continue
-                sweep = ptr.sweep
-                head = '    {}/{}: '.format(sweep.idx + 1, len(sweep))
-                line = '{} = {!r}'.format(arg._uname, value)
-                if isinstance(ptr, ParamSweepPointer):
-                    line += ':  from {!r}'.format(ptr._param)
-                    t = ptr._param._task
-                    if ptr._sweeps:
-                        _params = [repr(t.params[p]) for p in ptr._sweeps]
-                        _params = ', '.join(_params)
-                        line += ', sweeps={}'.format(_params)
-                    if ptr._squeeze:
-                        _params = [repr(t.params[p]) for p in ptr._squeeze]
-                        _params = ', '.join(_params)
-                        line += ', squeeze={}'.format(_params)
-                sweeped_lines[level] = head, line
-            elif loglevel == 0:
-                line = '{} = {!r}'
-                line = line.format(arg._uname, value)
+            if loglevel == 0:
+                line = '{} = {}'
+                line = line.format(arg._uname, _value_str(value))
                 if isinstance(ptr, ParamPointer):
                     line += ':  from {!r}'.format(ptr._param)
                     t = ptr._param._task
@@ -2078,19 +2074,11 @@ class Task(BaseSweepIterator):
                 const_lines.append(line)
         lines = []
         hmax = 8
-        if sweeped_lines:
-            hmax = max(len(head) for head, line in sweeped_lines.values())
-            for nlev in reversed(sorted(sweeped_lines)):
-                head, line = sweeped_lines[nlev]
-                hline = '{{:>{}}}'.format(hmax)
-                #~ print('{!r}, {!r}'.format(hline, head))
-                hline = hline.format(head)
-                hline += line
-                lines.append(hline)
         if const_lines:
             for line in const_lines:
-                lines.append(' '*hmax + line)
-        if loglevel is not None:
+                lines.append(' ' * hmax + line)
+        if lines and loglevel == 0:
+            log.info('    args:')
             log.info('\n'.join(lines))
 
         _result = self.func(**kwargs)
@@ -2112,7 +2100,8 @@ class Task(BaseSweepIterator):
         cidx = self.clen - 1
         for name, retval in self.returns:
             value = retval.get_cache(cidx)
-            line = '        {} = {}'.format(retval._uname, value)
+            line = '        {} = {}'.format(retval._uname,
+                                            _value_str(value))
             return_lines.append(line)
         if return_lines and loglevel == 0:
             log.info('    return values:')
@@ -2122,8 +2111,6 @@ class Task(BaseSweepIterator):
 
     def call(self, loglevel=0):
         nested = self.args._nested
-        line = '{} ({}/{})'.format(self.name, nested.idx + 1, len(nested))
-        log.info(line)
         _result = self._call(loglevel)
         return _result
 
@@ -2146,7 +2133,11 @@ class Task(BaseSweepIterator):
         return self.out(idx)
 
     def next_value(self, loglevel=0):
-        self.args._nested.next_value()
+        nested = self.args._nested
+        nested.next_value()
+        if self._logline:
+            log.info(self._logline.format(nested.idx + 1))
+            self._logline = ''
         self.call(loglevel)
         self.em.next()
         return self.value
@@ -2171,6 +2162,19 @@ class Task(BaseSweepIterator):
         plotmanager.log.setLevel('WARNING')
         sweeps = self.args._nested.sweeps[:num]
         inner_pre = [s.idx for s in sweeps]
+        nested = self.args._nested
+        if num != 0:
+            line = 'run {!r} from'.format(self)
+            line_len = len(line)
+            nlen = str(len(nested))
+            fmtstr = ' ({{:{}}}/{})'.format(len(nlen), nlen)
+            line += fmtstr + ' ...'
+        else:
+            line = 'run {!r}    ({{}}/{})'
+            line = line.format(self,    len(nested))
+        self._logline = line
+        if self.is_finished():
+            line = ''
         while 1:
             try:
                 self.next_value(loglevel=num)
@@ -2191,6 +2195,11 @@ class Task(BaseSweepIterator):
         if not plot_update:
             self.plot_update()
         plotmanager.log.level = plevel
+        if num != 0 and line:
+            line = '... to'
+            line = ' ' * (line_len - len(line)) + line
+            line += fmtstr.format(self.args._nested.idx + 1)
+            log.info(line)
 
     @property
     def depend_tasks(self):
