@@ -1,3 +1,4 @@
+import sys
 import logging
 
 def get_plain_logger(name):
@@ -13,7 +14,7 @@ def enable_logger(log, level='info', format='long'):
         format = '%(name)s: %(message)s'
     elif format.lower() == 'short':
         format = '%(message)s'
-    ch = logging.StreamHandler()
+    ch = logging.StreamHandler(sys.stdout)
     ch.setFormatter(logging.Formatter(format))
     if log.hasHandlers():
         log.handlers.clear()
