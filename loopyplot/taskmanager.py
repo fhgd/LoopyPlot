@@ -126,8 +126,7 @@ class BaseSweepIterator:
         # ToDo: remove self._is_initialized
         #
         # def next_value(self):
-        #     if idx != idx_next:
-        #         idx = idx_next
+        #     idx = idx_next
         #     idx_next = self.get_next_idx(idx)
         #     return self.get_value(idx)
 
@@ -2036,8 +2035,6 @@ class Task(BaseSweepIterator):
         self._config = []
         self._tm = _tm
 
-        self._logline = ''
-
     def reset(self):
         self.args._reset()
         self.clen = 0
@@ -2148,11 +2145,7 @@ class Task(BaseSweepIterator):
         return self.out(idx)
 
     def next_value(self, loglevel=0):
-        nested = self.args._nested
-        nested.next_value()
-        if self._logline:
-            log.info(self._logline.format(nested.idx + 1))
-            self._logline = ''
+        self.args._nested.next_value()
         self.call(loglevel)
         self.em.next()
         return self.value
@@ -2187,9 +2180,10 @@ class Task(BaseSweepIterator):
         else:
             line = 'run {!r}    ({{}}/{})'
             line = line.format(self,    len(nested))
-        self._logline = line
         if self.is_finished():
             line = ''
+        else:
+            log.info(line.format(nested.idx_next + 1))
         while 1:
             try:
                 self.next_value(loglevel=num)
@@ -2207,14 +2201,14 @@ class Task(BaseSweepIterator):
                 self.next_value(loglevel=num)
                 if plot_update:
                     self.plot_update()
-        if not plot_update:
-            self.plot_update()
-        plotmanager.log.level = plevel
         if num != 0 and line:
             line = '... to'
             line = ' ' * (line_len - len(line)) + line
             line += fmtstr.format(self.args._nested.idx + 1)
             log.info(line)
+        if not plot_update:
+            self.plot_update()
+        plotmanager.log.level = plevel
 
     @property
     def depend_tasks(self):
