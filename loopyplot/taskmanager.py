@@ -116,6 +116,21 @@ class BaseSweepIterator:
                 raise StopIteration
         return self.value
 
+    @property
+    def idx_next(self):
+        # used for progress logging
+        if self._is_initialized:
+            return self.idx
+        else:
+            return self.idx + 1
+        # ToDo: remove self._is_initialized
+        #
+        # def next_value(self):
+        #     if idx != idx_next:
+        #         idx = idx_next
+        #     idx_next = self.get_next_idx(idx)
+        #     return self.get_value(idx)
+
     def __next__(self):
         return self.next_value()
 
