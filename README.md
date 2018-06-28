@@ -58,6 +58,10 @@ The following demo shows the basic features of LoopyPlot:
 2. Run the nested loops
 3. Plot the function return values and show the data cursor
 
+*Further information can be found in the
+**![LoopyPlot-Tutorial](./tutorial.ipynb)**
+which is more detailed.*
+
 We will show the basis features by means of the nice lissajous example.
 First of all we need to write the experiment as a python function.
 Here we use two sinusoidal functions in order to create the lissajous
