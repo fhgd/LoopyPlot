@@ -974,7 +974,7 @@ class ParamSweepPointer:
         if not task.clen:
             msg = 'warning: task {} has no results, try {}.run()'
             msg = msg.format(task, task.name)
-            log.warning(msg)
+            #~ log.warning(msg)
         tstate = task.clen
         if tstate not in self._cidxs:
             cidxs, _ = task.args.select_by_sweep(self._sweeps,
