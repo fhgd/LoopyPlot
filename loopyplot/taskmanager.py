@@ -2939,7 +2939,7 @@ class TaskManager:
     def _is_finished(self):
         return not self._is_running()
 
-    def next_value(self, loglevel=0):
+    def next_value(self, loglevel=0, n=None):
         task = self._task_current
         if task.args._nested.is_finished():
             log.debug('{} was finished'.format(task))
@@ -2953,9 +2953,11 @@ class TaskManager:
             for name, arg in self.args:
                 arg._capture_idx()
         task.args._nested.next_value()
-        self.call(loglevel)
+        if n == 0:
+            self.call_log(loglevel)
+        task._call()
 
-    def call(self, loglevel=0):
+    def call_log(self, loglevel=0):
         lines = []
         cols = []
         for name, arg in reversed(tuple(self.args)):
@@ -2981,8 +2983,6 @@ class TaskManager:
         lines.append(line)
         log.info('\n'.join(lines))
 
-        task._call()
-
     def run(self, num=None, inner=False, plot_update=False):
         """run the sweeps of the taskmanager
 
@@ -3003,21 +3003,27 @@ class TaskManager:
         plotmanager.log.setLevel('WARNING')
         inner_pre = [s.idx for s in self._get_sweeps(num)]
         loglevel = num if num is not None and num >= 0 else None
+        n = 0
         while self._is_running():
             try:
-                self.next_value(loglevel)
+                self.next_value(loglevel, n)
                 if plot_update:
                     self._task_current.plot_update()
             except StopIteration:
                 break
             if all([s.is_finished() for s in self._get_sweeps(num)]):
                     break
+            n += 1
         if inner:
             while (self._is_running() and
                    ([s.idx for s in self._get_sweeps(num)] != inner_pre)):
                 self.next_value(loglevel)
                 if plot_update:
                     self._task_current.plot_update()
+        if n > 0:
+            if n > 1:
+                log.info('...')
+            self.call_log(loglevel)
         if not plot_update:
             if num is None or num < -1:
                 for name, task in self.tasks:
