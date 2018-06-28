@@ -2206,6 +2206,8 @@ class Task(BaseSweepIterator):
         self.args._configure()
         plevel = plotmanager.log.level
         plotmanager.log.setLevel('WARNING')
+        if plot_update and self.args._nested.is_running():
+            self.pm.open_window(0)
         sweeps = self.args._nested.sweeps[:num]
         inner_pre = [s.idx for s in sweeps]
         nested = self.args._nested
@@ -3001,6 +3003,8 @@ class TaskManager:
         self._configure()
         plevel = plotmanager.log.level
         plotmanager.log.setLevel('WARNING')
+        if plot_update and self._is_running():
+            self.pm.open_window(0)
         inner_pre = [s.idx for s in self._get_sweeps(num)]
         loglevel = num if num is not None and num >= 0 else None
         n = 0
