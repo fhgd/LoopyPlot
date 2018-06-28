@@ -509,16 +509,26 @@ class PlotManager:
     def _posxy(row, col, nrows, ncols):
         return row*ncols + col
 
-    def open_window(self, window):
-        label = self.get_window_label(window)
-        fig = plt.figure(label)
-        if fig is not self.windows[window]:
+    def open_window(self, window=0):
+        fig = self.windows.get(window, None)
+        if fig:
+            return fig
+        nb_backends = 'inline', 'notebook', 'nbAgg', 'ipympl'
+        backend = plt.matplotlib.get_backend()
+        if any(nbb in backend for nbb in nb_backends):
+            fig = plt.figure()
+            label = self.get_window_label(window)
+            fig.canvas.set_window_title(label)
+            fig.set_label(label)
+        else:
+            label = self.get_window_label(window)
+            fig = plt.figure(label)
             fig.clf()
             ids = fig.canvas.callbacks.callbacks.get('pick_event', [])
             for id in tuple(ids):
                 fig.canvas.mpl_disconnect(id)
-            fig.canvas.mpl_connect('pick_event', self.on_pick)
-            self.windows[window] = fig
+        fig.canvas.mpl_connect('pick_event', self.on_pick)
+        self.windows[window] = fig
         return fig
 
     def is_window_open(self, window):
