@@ -192,6 +192,11 @@ class PlotManager:
         #~ if view not in self.active:
             #~ self.enable(view)
 
+        if isinstance(row, list):
+            row = tuple(row)
+        if isinstance(col, list):
+            col = tuple(col)
+
         xpath = task._get_argpath(x)
         if xpath:
             xlabel = self._path_to_label(xpath, task)
