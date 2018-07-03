@@ -2929,6 +2929,10 @@ class TaskManager:
     def get_depend_args(self):
         return []
 
+    @property
+    def depend_tasks(self):
+        return OrderedDict()
+
     def _configure(self):
         self.args._configure()
         self.args._nested._is_initialized = False
