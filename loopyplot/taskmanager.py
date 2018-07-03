@@ -609,8 +609,10 @@ class ConcatPointer(BaseSweepIterator):
 def _value_str(value):
     if isinstance(value, str):
         return value
-    elif isinstance(value, (int, float, complex)):
-        return '{:.7g}'.format(value)
+    elif isinstance(value, int):
+        return '{}'.format(value)
+    elif isinstance(value, (float, complex)):
+        return '{:.7}'.format(value)
     elif isinstance(value, list):
         return '[{:.4g}, ...]'.format(value[0])
     elif isinstance(value, tuple):
