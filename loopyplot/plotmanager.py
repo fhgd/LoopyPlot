@@ -199,7 +199,7 @@ class PlotManager:
 
         xpath = task._get_argpath(x)
         if xpath:
-            xlabel = self._path_to_label(xpath, task)
+            xlabel = self._path_to_short_label(xpath, task)
             xunit = xpath[-1]._unit
             self.xlabel(task, xlabel, xunit, row, col)
         else:
@@ -207,7 +207,7 @@ class PlotManager:
         ypath = task._get_argpath(y)
         yunit = ypath[-1]._unit
         if len(ypath) == 1:
-            ylabel = self._path_to_label(ypath, task)
+            ylabel = self._path_to_short_label(ypath, task)
             self.ylabel(task, ylabel, yunit, row, col)
         else:
             ylabel = self._path_to_label(ypath, task, format='long')
@@ -570,6 +570,17 @@ class PlotManager:
         return ' | '.join(label)
 
     @staticmethod
+    def _path_to_short_label(path, task):
+        param = path[-1]
+        label = []
+        if param._task is not task:
+            label.append(param._task.name)
+        name = param.name.replace('_', '\_')
+        s = r'${}$'.format(name)
+        label.append(s)
+        return ' | '.join(label)
+
+    @staticmethod
     def _value_str(value):
         if isinstance(value, str):
             return value
@@ -591,8 +602,8 @@ class PlotManager:
         leg_lines = []
         leg_labels = []
         _params = set()
-        ylabel = self._path_to_label(lmngr.ypath, lmngr.task)
-        xlabel = self._path_to_label(lmngr.xpath, lmngr.task)
+        ylabel = self._path_to_short_label(lmngr.ypath, lmngr.task)
+        xlabel = self._path_to_short_label(lmngr.xpath, lmngr.task)
         yval_str = self._value_str(yval)
         if xlabel and lmngr.xpath[-1].name in lmngr.task.returns:
             label = '{}({}) = {}'.format(ylabel, xlabel, yval_str)
@@ -601,9 +612,7 @@ class PlotManager:
         _params.add(lmngr.ypath[-1])
         # xpath legend
         if lmngr.xpath:
-            param = lmngr.xpath[-1]
-            name = param.name.replace('_', '\_')
-            label += '\n${}$ = {}'.format(name, self._value_str(xval))
+            label += '\n{} = {}'.format(xlabel, self._value_str(xval))
             _params.add(lmngr.xpath[-1])
         else:
             label += '\n' 'index = {}'.format(idx)
@@ -614,16 +623,17 @@ class PlotManager:
         key = lmngr.get_key(cidxs[0])
         for state, (name, arg) in zip(key, lmngr.task.args):
             if arg not in _params and len(arg._states) > 1:
+                name = self._path_to_short_label([arg], lmngr.task)
                 if state is None:
-                    name = arg.name.replace('_', '\_')
+                    #~ name = arg.name.replace('_', '\_')
                     val_str = '_squeezed_'
-                    label = '${}$ = {}'.format(name, val_str)
+                    label = '{} = {}'.format(name, val_str)
                     #~ arg_labels.append(label)
                 else:
-                    name = arg.name.replace('_', '\_')
+                    #~ name = arg.name.replace('_', '\_')
                     val = arg.get_cache(cidxs[0])
                     val_str = self._value_str(val)
-                    label = '${}$ = {}'.format(name, val_str)
+                    label = '{} = {}'.format(name, val_str)
                     arg_labels.append(label)
                 _params.add(arg)
         if arg_labels:
