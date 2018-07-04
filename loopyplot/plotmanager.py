@@ -913,7 +913,7 @@ class LineManager:
             cidxs = [cidxs]
         states = []
         for cidx in cidxs:
-            state = [arg._cache[cidx] for n, arg in self.task.args]
+            state = [arg.get_arg_state(cidx) for n, arg in self.task.args]
             states.append(state)
         #~ state = self.get_key(cidx)
         for key, line in self.lines.items():
