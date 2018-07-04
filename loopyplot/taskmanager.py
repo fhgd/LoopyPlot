@@ -1669,6 +1669,18 @@ class ArgumentParams(Parameters):
         for arg in args[1:]:
             self._nested_args[arg] = idx
 
+    def _get_zipped_args(self, value):
+        try:
+            levels = self._nested_levels
+            all_args = set()
+            for arg in self._get(value):
+                if arg in self._nested_args:
+                    level = self._nested_args[arg]
+                    all_args.update(levels[level])
+            return all_args
+        except ValueError:
+            return value._task.args._get_zipped_args(value)
+
     @property
     def _nested_levels(self):
         """inverse of self._nested_args"""
