@@ -6,13 +6,23 @@ import random
 
 
 @Task
+def zeros(mid=1, d=0.5):
+    a = mid - d
+    b = mid + d
+    return a, b
+
+zeros.args.mid.iterate(0.75, 1.25)
+
+@Task
 def poly(x, a=0, b=0):
     y = (x - a)*(x - b)
     return y
 
-poly.args.x.sweep(0, 2, num=5)
-poly.args.a.iterate(0.25, 0.75)
-poly.args.b.iterate(1.25)
+poly.args.x.sweep(0, 2, num=25)
+poly.args.add_depending_task(zeros)
+poly.args.a.depends_on_param(zeros.returns.a)
+poly.args.b.depends_on_param(zeros.returns.b)
+#~ poly.args.b.iterate(1.25)
 #~ poly.args.b.iterate(1.25, 1.75)
 #~ poly.args.b.iterate(0.5, 2)
 #~ poly.args.c.iterate(-1, 2)
@@ -37,9 +47,10 @@ noise.args.sigma.iterate(0.01, 0.05)
 noise.args.s.iterate(1, 5)
 noise.args.zip('sigma', 's')
 
-noise.plot(poly.args.x, 'x')
+#~ noise.plot(poly.args.x, 'x')
 noise.plot(poly.args.x, 'y')
 
+zeros.run()
 poly.run()
 noise.run()
 

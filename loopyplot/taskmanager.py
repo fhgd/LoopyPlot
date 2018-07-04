@@ -2609,6 +2609,22 @@ class Task(BaseSweepIterator):
         else:
             return self.get_path(value)
 
+    def get_cidx_from_path(self, path, cidx=None):
+        if cidx is None:
+            cidx = range(self.clen)
+        try:
+            return [self.get_value_from_path(path, idx) for idx in cidx]
+        except TypeError:
+            task = self
+            for arg in path[:-1]:
+                if task == arg._task:
+                    task = arg._ptr.task
+                else:
+                    msg = 'task {} != {}'.format(task, arg._task)
+                    raise ValueError(msg)
+                cidx = arg.get_depend_cidx(cidx)
+        return cidx
+
     # ToDo: should be in self.args
     def get_value_from_path(self, path, cidx=None):
         if cidx is None:

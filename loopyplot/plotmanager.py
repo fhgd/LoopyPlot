@@ -724,7 +724,9 @@ class LineManager:
         self.ypath = ypath
 
         # squeeze
-        self.squeeze = self.task.args._get_zipped_args(squeeze)
+        self.squeeze = squeeze
+        self._key_args = task.args._get_non_squeezed_args(squeeze)
+        self._key_path = [task.get_path(arg) for arg in self._key_args]
         # accumulate
         if accumulate is None and self.squeeze:
             accumulate = '*'
@@ -826,31 +828,12 @@ class LineManager:
         return lines
 
     def get_key(self, cidx):
-        keys = self.task.args._get_key_dict(cidx)
-        for arg in self.squeeze:
-            if arg in keys:
-                keys[arg] = None
-            else:
-                keys[arg] = None
-                for task in arg._tasks:
-                    for n, a in task.args:
-                        keys.pop(a, None)
-        # ToDo: return namedtuple
-        return tuple(keys.values())
-
         # ToDo: results could be cached, maybe in self._keys (cidx: key)
-        key = []
-        for name, arg in self.task.args:
-            if arg in self.squeeze:
-                key.append(None)
-            elif (not self.squeeze
-                  and arg is not self.ypath[0]
-                  and self.ypath[0] in self.task.args
-            ):
-                key.append(None)
-            else:
-                key.append(arg._cache[cidx])
-        return tuple(key)
+        keys = []
+        for path in self._key_path:
+            cidx = self.task.get_cidx_from_path(path, cidx)
+            keys.append(path[-1].get_arg_state(cidx))
+        return tuple(keys)
 
     def update(self):
         datas = OrderedDict()   # key: cidxs, xvals, yvals
