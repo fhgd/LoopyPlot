@@ -47,8 +47,8 @@ noise.args.sigma.iterate(0.01, 0.05)
 noise.args.s.iterate(1, 5)
 noise.args.zip('sigma', 's')
 
-#~ noise.plot(poly.args.x, 'x')
 noise.plot(poly.args.x, 'y')
+noise.plot(poly.args.x, 'x', accumulate=['x', zeros.args.mid])
 
 zeros.run()
 poly.run()
