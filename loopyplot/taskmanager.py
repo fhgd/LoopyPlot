@@ -1710,6 +1710,23 @@ class ArgumentParams(Parameters):
         self._last_tasksweep = self._tasksweeps[task]
         self._last_tasksweep_args = []
 
+    def _get_non_squeezed_args(self, squeeze):
+        sq_args = self._get_zipped_args(squeeze)
+        dep_tasks = set()
+        args = []
+        for name, arg in self:
+            if arg in sq_args:
+                continue
+            tasks = arg._tasks
+            if tasks:
+                dep_tasks.update(tasks)
+            else:
+                # local arg
+                args.append(arg)
+        for task in dep_tasks:
+            args.extend(task.args._get_non_squeezed_args(squeeze))
+        return args
+
     def _add_sweeped_arg(self, arg):
         idx = max([0] + list(self._nested_args.values()))
         self._nested_args[arg] = idx + 1
