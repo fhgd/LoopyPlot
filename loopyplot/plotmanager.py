@@ -731,16 +731,18 @@ class LineManager:
         if accumulate is None and self.squeeze:
             accumulate = '*'
         if accumulate == '*':
-            args = [arg for n, arg in self.task.args]
+            acc_args = self._key_args
         else:
-            args = self.task.args._get(accumulate)
-        levels = self.task.args._nested_levels
-        all_args = set(args)
-        for arg in args:
-            if arg in self.task.args._nested_args:
-                level = self.task.args._nested_args[arg]
-                all_args.update(levels[level])
-        self.mask = [arg in all_args for n, arg in self.task.args]
+            try:
+                args = task.args._get(accumulate)
+            except ValueError:
+                msg = '{!r} not in key_args: {}'
+                msg = msg.format(accumulate, self._key_args)
+                raise ValueError(msg)
+            acc_args = set(args)
+            for arg in args:
+                acc_args.update(task.args._get_zipped_args(arg))
+        self.mask = [arg in acc_args for arg in self._key_args]
 
         self.lines = {}     # key: line
         self.cidxs = {}     # line: [cidx, ...]
@@ -900,9 +902,7 @@ class LineManager:
             cidxs = [cidxs]
         states = []
         for cidx in cidxs:
-            state = [arg.get_arg_state(cidx) for n, arg in self.task.args]
-            states.append(state)
-        #~ state = self.get_key(cidx)
+            states.append(self.get_key(cidx))
         for key, line in self.lines.items():
             value = 0
             for state in states:
