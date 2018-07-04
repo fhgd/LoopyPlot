@@ -1667,6 +1667,14 @@ class ArgumentParams(Parameters):
         for arg in args[1:]:
             self._nested_args[arg] = idx
 
+    @property
+    def _nested_levels(self):
+        """inverse of self._nested_args"""
+        levels = {}
+        for arg, level in self._nested_args.items():
+            levels.setdefault(level, []).append(arg)
+        return levels
+
     def add_depending_task(self, task, squeeze=''):
         ts_by_squeeze = self._tasksweeps.setdefault(task, {})
         if squeeze not in ts_by_squeeze:
@@ -2587,20 +2595,17 @@ class Task(BaseSweepIterator):
 
     # ToDo: should be in task.args
     def get_depend_args(self):
-        nested = {}
-        for arg, idx in self.args._nested_args.items():
-            args = nested.setdefault(idx, [])
-            args.append(arg)
         params = {}
         for name, arg in self.args:
             if isinstance(arg._ptr, (ParamPointer, DependParamPointer)):
                 args = params.setdefault(arg._ptr._param, [])
                 args.append(arg)
+        levels = self.args._nested_levels
         dep_args = {}
         for name, arg in self.args:
             if arg in self.args._nested_args:
                 idx = self.args._nested_args[arg]
-                args = nested[idx]
+                args = levels[idx]
                 if len(args) > 1:
                     dep_args[name] = [a for a in args if a is not arg]
             elif isinstance(arg._ptr, (ParamPointer, DependParamPointer)):

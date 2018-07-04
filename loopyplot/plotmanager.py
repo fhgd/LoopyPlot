@@ -724,9 +724,7 @@ class LineManager:
         self.ypath = ypath
 
         # inverse of self.task.nested_args
-        levels = {}
-        for arg, level in self.task.args._nested_args.items():
-            levels.setdefault(level, []).append(arg)
+        levels = self.task.args._nested_levels
         # squeeze
         #~ all_args = set()
         #~ for arg in self.task.args._get(squeeze):
