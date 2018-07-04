@@ -1167,6 +1167,9 @@ class Argument:
     def _ptr(self, value):
         self._ptrs._pointers = [value]
 
+    def get_arg_state(self, cidx):
+        return self._cache[cidx]
+
     @property
     def state(self):
         iptr = self._ptrs._iptr
@@ -1180,20 +1183,24 @@ class Argument:
         log.debug('{!r}: state={}: for ptr={}'.format(self, value, ptr))
         ptr.state = state
 
+    def get_value(self, arg_state):
+        iptr, state = arg_state
+        return self._ptrs._pointers[iptr].get_value(state)
+
     def get_cache(self, cidxs=None):
         if cidxs is None:
             cidxs = range(len(self._cache))
         try:
             return [self.get_cache(cidx) for cidx in cidxs]
         except TypeError:
-            iptr, state = self._cache[cidxs]
-            return self._ptrs._pointers[iptr].get_value(state)
+            arg_state = self.get_arg_state(cidxs)
+            return self.get_value(arg_state)
 
     def get_depend_cidx(self, cidxs):
         try:
             return [self.get_depend_cidx(cidx) for cidx in cidxs]
         except TypeError:
-            iptr, state = self._cache[cidxs]
+            iptr, state = self.get_arg_state(cidxs)
             return self._ptrs._pointers[iptr].get_task_cidx(state)
 
     @property
