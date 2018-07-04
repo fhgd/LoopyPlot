@@ -1519,6 +1519,13 @@ class DependParamPointer:
     def configure(self):
         self._tasksweep.configure()
 
+    @property
+    def task(self):
+        return self._tasksweep.task
+
+    def get_task_cidx(self, state):
+        return state
+
 
 class ContainerNamespace:
     # read-only attributes except for underscore
@@ -1575,10 +1582,10 @@ class Parameters(ContainerNamespace):
             return params
         elif value in ('', None):
             return []
-        elif value in self._params.values():
-            return [value]
         elif isinstance(value, str):
             return [self[name.strip()] for name in value.split(',')]
+        elif value in self._params.values():
+            return [value]
         else:
             msg = '{!r} is not a parameter of task {}'
             msg = msg.format(value, self._task)
@@ -2635,7 +2642,7 @@ class Task(BaseSweepIterator):
     def plot(self, x='', y='', squeeze=None, accumulate=None,
              row=0, col=0, use_cursor=True, **kwargs):
         if squeeze is None:
-            squeeze = x if x in self.args else ''
+            squeeze = x
         self.pm.plot(self, x, y, squeeze, accumulate, row, col,
                      use_cursor, **kwargs)
         self.plot_update()
