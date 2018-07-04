@@ -1605,7 +1605,9 @@ class ArgumentParams(Parameters):
         super().__init__(task)
         self._nested = Nested()
         self._nested_args = {}
-        self._tasksweeps = {}           # task: squeeze: tasksweep
+        self._tasksweeps = {}           # task: tasksweep
+
+        # used as cache for configuration
         self._last_tasksweep = None
         self._last_tasksweep_args = []  # [arg, ...]
 
@@ -1676,11 +1678,10 @@ class ArgumentParams(Parameters):
         return levels
 
     def add_depending_task(self, task, squeeze=''):
-        ts_by_squeeze = self._tasksweeps.setdefault(task, {})
-        if squeeze not in ts_by_squeeze:
+        if task not in self._tasksweeps:
             tasksweep = TaskSweep(task, squeeze)
-            ts_by_squeeze[squeeze] = tasksweep
-        self._last_tasksweep = ts_by_squeeze[squeeze]
+            self._tasksweeps[task] = tasksweep
+        self._last_tasksweep = self._tasksweeps[task]
         self._last_tasksweep_args = []
 
     def _add_sweeped_arg(self, arg):
