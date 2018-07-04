@@ -1587,9 +1587,16 @@ class Parameters(ContainerNamespace):
         elif value in self._params.values():
             return [value]
         else:
-            msg = '{!r} is not a parameter of task {}'
-            msg = msg.format(value, self._task)
-            raise ValueError(msg)
+            dep_tasks = self._task.depend_tasks.keys()
+            try:
+                if value._task in dep_tasks:
+                    return [value]
+                else:
+                    raise KeyError
+            except (AttributeError, KeyError):
+                msg = '{!r} is not a parameter of task {}'
+                msg = msg.format(value, self._task)
+                raise ValueError(msg)
 
 
 class NumpyPrettyPrint():
