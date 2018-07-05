@@ -577,6 +577,8 @@ class PlotManager:
 
     @staticmethod
     def _path_to_short_label(path, task):
+        if not path:
+            return ''
         param = path[-1]
         label = []
         if param._task is not task:
@@ -626,22 +628,30 @@ class PlotManager:
         leg_lines.append(line)
         # args legend
         arg_labels = []
-        key = lmngr.get_key(cidxs[0])
-        for state, (name, arg) in zip(key, lmngr.task.args):
-            if arg not in _params and len(arg._states) > 1:
-                name = self._path_to_short_label([arg], lmngr.task)
-                if state is None:
-                    #~ name = arg.name.replace('_', '\_')
-                    val_str = '_squeezed_'
-                    label = '{} = {}'.format(name, val_str)
-                    #~ arg_labels.append(label)
-                else:
-                    #~ name = arg.name.replace('_', '\_')
-                    val = arg.get_cache(cidxs[0])
-                    val_str = self._value_str(val)
-                    label = '{} = {}'.format(name, val_str)
-                    arg_labels.append(label)
-                _params.add(arg)
+        # add squeezed args
+        for arg in lmngr.squeeze:
+            if arg in _params or len(arg._states) <= 1:
+                continue
+            name = self._path_to_short_label([arg], lmngr.task)
+            val = arg.get_cache(cidxs[0])
+            val_str = self._value_str(val)
+            label = '{} = {}'.format(name, val_str)
+            arg_labels.append(label)
+            _params.add(arg)
+        # add line args
+        arg_states = lmngr.get_key(cidxs[0])
+        for state, path in zip(arg_states, lmngr._key_path):
+            if path[-1] in _params or len(path[-1]._states) <= 1:
+                continue
+            name = self._path_to_short_label(path, lmngr.task)
+            if state is None:
+                val_str = '_squeezed_'
+            else:
+                val = path[-1].get_value(state)
+                val_str = self._value_str(val)
+            label = '{} = {}'.format(name, val_str)
+            arg_labels.append(label)
+            _params.add(path[-1])
         if arg_labels:
             leg_lines.append(line)
             leg_labels.append('\n'.join(arg_labels))
@@ -687,8 +697,8 @@ class PlotManager:
             leg_lines = []
             leg_labels = []
             for lm, lines in legs[ax].items():
-                ylabel = self._path_to_label(lm.ypath, lm.task)
-                xlabel = self._path_to_label(lm.xpath, lm.task)
+                ylabel = self._path_to_short_label(lm.ypath, lm.task)
+                xlabel = self._path_to_short_label(lm.xpath, lm.task)
                 if xlabel and lm.xpath[-1].name in lm.task.returns:
                     label = '{}({})'.format(ylabel, xlabel)
                 else:
