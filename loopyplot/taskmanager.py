@@ -1432,6 +1432,93 @@ class Argument:
         else:
             self._ptr = ptr
 
+    def depends_on_param(self, param, concat=False):
+        #~ self._task.args._remove_sweeped_arg(self)
+        task = param._task
+        if self._task.args._last_tasksweep is None:
+            msg = '{} is not a depending task'.format(task)
+            log.error(msg)
+            msg = "try: {}.args.add_depending_task({}, squeeze='')"
+            msg = msg.format(self._task.name, task.name)
+            log.info(msg)
+            return
+        elif task is not self._task.args._last_tasksweep.task:
+            msg = '{} was not the last added depending task'.format(task)
+            log.error(msg)
+            msg = "try: {}.args.add_depending_task({}, squeeze='')"
+            msg = msg.format(self._task.name, task.name)
+            log.info(msg)
+            return
+        ptr = DependParamPointer(param, self._task.args._last_tasksweep)
+        if concat:
+            self._ptrs.append(ptr)
+        else:
+            self._ptr = ptr
+        self._task.args._add_sweeped_arg(self)
+        args = self._task.args._last_tasksweep_args
+        args.append(self)
+        if len(args) > 1:
+            self._task.args.zip(*self._task.args._last_tasksweep_args)
+
+
+class TaskSweep(BaseSweepIterator):
+    def __init__(self, task, squeeze=''):
+        self.task = task
+        self.squeeze = squeeze
+        self.clen = 0
+        self.last_clen = 0
+        super().__init__()
+
+    def get_value(self, idx):
+        cidx = self.last_clen + idx
+        return cidx
+
+    def __len__(self):
+        return self.clen - self.last_clen
+
+    def configure(self):
+        if self.clen != self.task.clen:
+            self.last_clen = self.clen
+            self.clen = self.task.clen
+        #~ self.idx = 0
+
+
+class DependParamPointer:
+    def __init__(self, param, tasksweep):
+        msg = 'param and tasksweep must have the same task'
+        assert param._task is tasksweep.task, msg
+        self._param = param
+        self._tasksweep = tasksweep
+
+    @property
+    def state(self):
+        cidx = self._tasksweep.value
+        return cidx
+
+    def get_value(self, state):
+        try:
+            return self._param.get_cache(state)
+        except IndexError:
+            msg = 'warning: no results from task {}, try {}.run()'
+            task = self._param._task
+            msg = msg.format(task, task.name)
+            log.warning(msg)
+            return np.nan
+
+    @property
+    def value(self):
+        return self.get_value(self.state)
+
+    def _get_key_dict(self, cidx):
+        return self._param._task.args._get_key_dict(cidx)
+
+    @property
+    def sweep(self):
+        return self._tasksweep
+
+    def configure(self):
+        self._tasksweep.configure()
+
 
 class ContainerNamespace:
     # read-only attributes except for underscore
@@ -1518,6 +1605,9 @@ class ArgumentParams(Parameters):
         super().__init__(task)
         self._nested = Nested()
         self._nested_args = {}
+        self._tasksweeps = {}           # task: squeeze: tasksweep
+        self._last_tasksweep = None
+        self._last_tasksweep_args = []  # [arg, ...]
 
     def __repr__(self):
         maxlen = max([0] + [len(param._uname) for name, param in self])
@@ -1548,6 +1638,15 @@ class ArgumentParams(Parameters):
                     ptr_repr += ', squeeze={!r}'.format(ptr._squeeze)
                 line += '\t({}/{}):\t{}'.format(sweep.idx + 1, len(sweep),
                                                 ptr_repr)
+            elif isinstance(ptr, DependParamPointer):
+                sweep = ptr.sweep
+                ptr_repr = 'from {!r}'.format(ptr._param)
+                squeeze = ptr._tasksweep.squeeze
+                if squeeze:
+                    squeeze_str = ', '.join(repr(path) for path in squeeze)
+                    ptr_repr += ', squeeze {}'.format(squeeze_str)
+                line += '\t({}/{}):\t{}'.format(sweep.idx + 1, len(sweep),
+                                                ptr_repr)
             elif isinstance(ptr, ParamPointer):
                 ptr_repr = 'from {!r}'.format(ptr._param)
                 if ptr._squeeze:
@@ -1568,9 +1667,18 @@ class ArgumentParams(Parameters):
         for arg in args[1:]:
             self._nested_args[arg] = idx
 
+    def add_depending_task(self, task, squeeze=''):
+        ts_by_squeeze = self._tasksweeps.setdefault(task, {})
+        if squeeze not in ts_by_squeeze:
+            tasksweep = TaskSweep(task, squeeze)
+            ts_by_squeeze[squeeze] = tasksweep
+        self._last_tasksweep = ts_by_squeeze[squeeze]
+        self._last_tasksweep_args = []
+
     def _add_sweeped_arg(self, arg):
         idx = max([0] + list(self._nested_args.values()))
         self._nested_args[arg] = idx + 1
+        #~ self._tasksweeps.pop(arg, None)
 
     def _remove_sweeped_arg(self, arg):
         self._nested_args.pop(arg, None)
@@ -1600,6 +1708,19 @@ class ArgumentParams(Parameters):
             value = not len(arg._cache) or arg._cache[-1] != arg.state
             changed.append(value)
         return any(changed)
+
+    def _get_key_dict(self, cidx):
+        keys = {}
+        for name, arg in self:
+            arg_state = arg._cache[cidx]
+            iptr, state = arg_state
+            ptr = arg._ptrs._pointers[iptr]
+            try:
+                # ToDo: prepend iptr to the depending arg-states
+                keys.update(ptr._get_key_dict(state))
+            except AttributeError:
+                keys[arg] = arg_state
+        return keys
 
     def _reset(self):
         self._nested.reset()
@@ -2231,8 +2352,6 @@ class Task(BaseSweepIterator):
         task.run(1, True)    next value of second loop until
                              the same inner loop idx
         """
-        if num is None and self.args._is_finished():
-            self.reset()
         self.args._configure()
         plevel = plotmanager.log.level
         plotmanager.log.setLevel('WARNING')
@@ -2474,7 +2593,7 @@ class Task(BaseSweepIterator):
             args.append(arg)
         params = {}
         for name, arg in self.args:
-            if isinstance(arg._ptr, ParamPointer):
+            if isinstance(arg._ptr, (ParamPointer, DependParamPointer)):
                 args = params.setdefault(arg._ptr._param, [])
                 args.append(arg)
         dep_args = {}
@@ -2484,7 +2603,7 @@ class Task(BaseSweepIterator):
                 args = nested[idx]
                 if len(args) > 1:
                     dep_args[name] = [a for a in args if a is not arg]
-            elif isinstance(arg._ptr, ParamPointer):
+            elif isinstance(arg._ptr, (ParamPointer, DependParamPointer)):
                 args = params[arg._ptr._param]
                 if len(args) > 1:
                     dep_args[name] = [a for a in args if a is not arg]
