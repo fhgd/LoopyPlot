@@ -34,32 +34,33 @@ poly.args.b.depends_on_param(zeros.returns.b)
 #~ print(df)
 
 @Task
-def noise(x, sigma=0.2, s=0.2, a=0, b=1):
-    y = random.gauss(x, sigma)
+def noise(x, sigma=0.2, s=0.1, a=0, b=1):
+    y = random.gauss(x, sigma*s)
     return y
 
 #~ noise.args.x.sweep(0, 5, step=poly.returns.y)
 noise.args.add_depending_task(poly)
 noise.args.x.depends_on_param(poly.returns.y)
 noise.args.a.depends_on_param(poly.args.a)
-#~ noise.args.sigma.iterate(0.1)
-noise.args.sigma.iterate(0.01, 0.05)
-noise.args.s.iterate(1, 5)
-noise.args.zip('sigma', 's')
 
 noise.args.add_depending_task(zeros)
-noise.args.b.depends_on_param(zeros.returns.b)
+noise.args.sigma.depends_on_param(zeros.returns.a)
 
-
+#~ noise.args.sigma.iterate(0.01, 0.05)
+#~ noise.args.sigma.iterate(0.01, 0.05)
+noise.args.s.iterate(0.1, 0.2)
+noise.args.zip('sigma', 's')
 
 if 1:
-    noise.plot(poly.args.x, 'y')
-    noise.plot(poly.args.x, 'x', accumulate=['x', zeros.args.mid])
-
-if 0:
     zeros.run()
     poly.run()
     noise.run()
+
+if 1:
+    noise.plot(poly.args.x, 'y')
+if 0:
+    noise.plot(poly.args.x, 'x', accumulate=['x', zeros.args.mid])
+
 
 
 #~ noise.run(2)

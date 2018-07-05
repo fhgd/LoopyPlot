@@ -579,11 +579,11 @@ class PlotManager:
     def _path_to_short_label(path, task):
         if not path:
             return ''
-        param = path[-1]
         label = []
-        if param._task is not task:
-            label.append(param._task.name)
-        name = param.name.replace('_', '\_')
+        for arg in path:
+            if arg._task is not task:
+                label.append(arg._task.name)
+        name = arg.name.replace('_', '\_')
         s = r'${}$'.format(name)
         label.append(s)
         return ' | '.join(label)
@@ -617,11 +617,11 @@ class PlotManager:
             label = '{}({}) = {}'.format(ylabel, xlabel, yval_str)
         else:
             label = '{} = {}'.format(ylabel, yval_str)
-        _params.add(lmngr.ypath[-1])
+        _params.add(tuple(lmngr.ypath))
         # xpath legend
         if lmngr.xpath:
             label += '\n{} = {}'.format(xlabel, self._value_str(xval))
-            _params.add(lmngr.xpath[-1])
+            _params.add(tuple(lmngr.xpath))
         else:
             label += '\n' 'index = {}'.format(idx)
         leg_labels.append(label)
@@ -629,19 +629,20 @@ class PlotManager:
         # args legend
         arg_labels = []
         # add squeezed args
-        for arg in lmngr.squeeze:
-            if arg in _params or len(arg._states) <= 1:
+        for path in lmngr.squeeze:
+            if tuple(path) in _params or len(arg._states) <= 1:
                 continue
-            name = self._path_to_short_label([arg], lmngr.task)
-            val = arg.get_cache(cidxs[0])
+            name = self._path_to_short_label(path, lmngr.task)
+            _cidx = lmngr.task.get_cidx_from_path(path, cidxs[0])
+            val = path[-1].get_arg_state(_cidx)
             val_str = self._value_str(val)
             label = '{} = {}'.format(name, val_str)
             arg_labels.append(label)
-            _params.add(arg)
+            _params.add(tuple(path))
         # add line args
         arg_states = lmngr.get_key(cidxs[0])
-        for state, path in zip(arg_states, lmngr._key_path):
-            if path[-1] in _params or len(path[-1]._states) <= 1:
+        for state, path in zip(arg_states, lmngr._key_paths):
+            if tuple(path) in _params or len(path[-1]._states) <= 1:
                 continue
             name = self._path_to_short_label(path, lmngr.task)
             if state is None:
@@ -651,7 +652,7 @@ class PlotManager:
                 val_str = self._value_str(val)
             label = '{} = {}'.format(name, val_str)
             arg_labels.append(label)
-            _params.add(path[-1])
+            _params.add(tuple(path))
         if arg_labels:
             leg_lines.append(line)
             leg_labels.append('\n'.join(arg_labels))
@@ -750,35 +751,31 @@ class LineManager:
         self.ypath = ypath
 
         # squeeze
-        self.squeeze = []
-        for arg in squeeze:
-            self.squeeze += arg._task.args._get_zipped_args(arg)
-        self._key_args = task.args._get_non_squeezed_args(self.squeeze)
+        key_paths, sq_paths = task.args._get_key_paths(squeeze)
+        self.squeeze = sq_paths
+        self._key_paths = key_paths
+        # accumulate
         """
-        task.args._get_non_squeezed_args(self.squeeze)
-            should return paths or at least via_args
-
         accumulate
             could be contain path or (param, via_arg_or_task)
         """
-        self._key_path = [task.get_path(arg) for arg in self._key_args]
-        # accumulate
-        if accumulate is None and self.squeeze:
-            accumulate = '*'
-        if accumulate == '*':
-            acc_args = self._key_args
-        else:
-            try:
-                args = task.args._get(accumulate)
-            except ValueError:
-                msg = '{!r} not in key_args: {}'
-                msg = msg.format(accumulate, self._key_args)
-                raise ValueError(msg)
-            acc_args = set(args)
-            for arg in args:
-                acc_args.update(task.args._get_zipped_args(arg))
-        self.mask = [arg in acc_args for arg in self._key_args]
-        self._acc_args = acc_args
+        #~ if accumulate is None and self.squeeze:
+            #~ accumulate = '*'
+        #~ if accumulate == '*':
+            #~ acc_args = self._key_args
+        #~ else:
+            #~ try:
+                #~ args = task.args._get(accumulate)
+            #~ except ValueError:
+                #~ msg = '{!r} not in key_args: {}'
+                #~ msg = msg.format(accumulate, self._key_args)
+                #~ raise ValueError(msg)
+            #~ acc_args = set(args)
+            #~ for arg in args:
+                #~ acc_args.update(task.args._get_zipped_args(arg))
+        #~ self.mask = [arg in acc_args for arg in self._key_args]
+        self.mask = [True for path in self._key_paths]
+        #~ self._acc_args = acc_args
 
         self.lines = {}     # key: line
         self.cidxs = {}     # line: [cidx, ...]
@@ -868,14 +865,14 @@ class LineManager:
     def get_key(self, cidx):
         # ToDo: results could be cached, maybe in self._keys (cidx: key)
         keys = []
-        for path in self._key_path:
+        for path in self._key_paths:
             if (not self.squeeze
                 and path[0] is not self.ypath[0]
                 and self.ypath[0] in self.task.args):
                     keys.append(None)
                     continue
-            cidx = self.task.get_cidx_from_path(path, cidx)
-            keys.append(path[-1].get_arg_state(cidx))
+            _cidx = self.task.get_cidx_from_path(path, cidx)
+            keys.append(path[-1].get_arg_state(_cidx))
         return tuple(keys)
 
     def update(self):
