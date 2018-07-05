@@ -34,7 +34,7 @@ poly.args.b.depends_on_param(zeros.returns.b)
 #~ print(df)
 
 @Task
-def noise(x, sigma=0.2, s=0.2, a=0):
+def noise(x, sigma=0.2, s=0.2, a=0, b=1):
     y = random.gauss(x, sigma)
     return y
 
@@ -47,12 +47,17 @@ noise.args.sigma.iterate(0.01, 0.05)
 noise.args.s.iterate(1, 5)
 noise.args.zip('sigma', 's')
 
-noise.plot(poly.args.x, 'y')
-noise.plot(poly.args.x, 'x', accumulate=['x', zeros.args.mid])
+#~ noise.args.add_depending_task(zeros)
+#~ noise.args.b.depends_on_param(zeros.returns.b)
 
-zeros.run()
-poly.run()
-noise.run()
+if 1:
+    noise.plot(poly.args.x, 'y')
+    noise.plot(poly.args.x, 'x', accumulate=['x', zeros.args.mid])
+
+if 1:
+    zeros.run()
+    poly.run()
+    noise.run()
 
 
 #~ noise.run(2)

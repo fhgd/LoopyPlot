@@ -754,6 +754,13 @@ class LineManager:
         for arg in squeeze:
             self.squeeze += arg._task.args._get_zipped_args(arg)
         self._key_args = task.args._get_non_squeezed_args(self.squeeze)
+        """
+        task.args._get_non_squeezed_args(self.squeeze)
+            should return paths or at least via_args
+
+        accumulate
+            could be contain path or (param, via_arg_or_task)
+        """
         self._key_path = [task.get_path(arg) for arg in self._key_args]
         # accumulate
         if accumulate is None and self.squeeze:
@@ -771,6 +778,7 @@ class LineManager:
             for arg in args:
                 acc_args.update(task.args._get_zipped_args(arg))
         self.mask = [arg in acc_args for arg in self._key_args]
+        self._acc_args = acc_args
 
         self.lines = {}     # key: line
         self.cidxs = {}     # line: [cidx, ...]
