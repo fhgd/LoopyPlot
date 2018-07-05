@@ -728,12 +728,13 @@ class LineManager:
         for arg, level in self.task.args._nested_args.items():
             levels.setdefault(level, []).append(arg)
         # squeeze
-        all_args = set()
-        for arg in self.task.args._get(squeeze):
-            if arg in self.task.args._nested_args:
-                level = self.task.args._nested_args[arg]
-                all_args.update(levels[level])
-        self.squeeze = all_args
+        #~ all_args = set()
+        #~ for arg in self.task.args._get(squeeze):
+            #~ if arg in self.task.args._nested_args:
+                #~ level = self.task.args._nested_args[arg]
+                #~ all_args.update(levels[level])
+        #~ self.squeeze = all_args
+        self.squeeze = squeeze
         # accumulate
         if accumulate is None and self.squeeze:
             accumulate = '*'
@@ -834,6 +835,11 @@ class LineManager:
         return lines
 
     def get_key(self, cidx):
+        keys = self.task.args._get_key_dict(cidx)
+        for arg in self.squeeze:
+            keys[arg] = None
+        return tuple(keys.values())
+
         # ToDo: results could be cached, maybe in self._keys (cidx: key)
         key = []
         for name, arg in self.task.args:
