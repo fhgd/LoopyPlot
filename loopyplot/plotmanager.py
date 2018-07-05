@@ -214,11 +214,17 @@ class PlotManager:
             self.ylabel(task, ylabel, yunit, row, col,
                         rotation='vertical',
                         horizontalalignment='center')
+        if squeeze is None and xpath:
+            xparam = xpath[-1]
+            if xparam in xparam._task.args:
+                squeeze = [xparam]
+        else:
+            squeeze = task.args._get(squeeze)
 
         args = dict(
             xpath=xpath,
             ypath=ypath,
-            squeeze=squeeze,
+            squeeze=[] if squeeze is None else squeeze,
             accumulate=accumulate,
             use_cursor=use_cursor,
             kwargs=kwargs,
@@ -734,8 +740,10 @@ class LineManager:
         self.ypath = ypath
 
         # squeeze
-        self.squeeze = squeeze
-        self._key_args = task.args._get_non_squeezed_args(squeeze)
+        self.squeeze = []
+        for arg in squeeze:
+            self.squeeze += arg._task.args._get_zipped_args(arg)
+        self._key_args = task.args._get_non_squeezed_args(self.squeeze)
         self._key_path = [task.get_path(arg) for arg in self._key_args]
         # accumulate
         if accumulate is None and self.squeeze:

@@ -1710,8 +1710,7 @@ class ArgumentParams(Parameters):
         self._last_tasksweep = self._tasksweeps[task]
         self._last_tasksweep_args = []
 
-    def _get_non_squeezed_args(self, squeeze):
-        sq_args = self._get_zipped_args(squeeze)
+    def _get_non_squeezed_args(self, sq_args):
         dep_tasks = set()
         args = []
         for name, arg in self:
@@ -1724,7 +1723,7 @@ class ArgumentParams(Parameters):
                 # local arg
                 args.append(arg)
         for task in dep_tasks:
-            args.extend(task.args._get_non_squeezed_args(squeeze))
+            args.extend(task.args._get_non_squeezed_args(sq_args))
         return args
 
     def _add_sweeped_arg(self, arg):
@@ -2681,8 +2680,6 @@ class Task(BaseSweepIterator):
     @config
     def plot(self, x='', y='', squeeze=None, accumulate=None,
              row=0, col=0, use_cursor=True, **kwargs):
-        if squeeze is None:
-            squeeze = x
         self.pm.plot(self, x, y, squeeze, accumulate, row, col,
                      use_cursor, **kwargs)
         self.plot_update()
