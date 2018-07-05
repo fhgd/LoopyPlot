@@ -1593,14 +1593,16 @@ class Parameters(ContainerNamespace):
             return self.__get(value)
 
     def __get(self, value):
+        dep_tasks = self._task.depend_tasks.keys()
         if value in ('', None):
             return []
         elif isinstance(value, str):
             return [self[name.strip()] for name in value.split(',')]
         elif value in self._params.values():
             return [value]
+        elif value in dep_tasks:
+            return [value]
         else:
-            dep_tasks = self._task.depend_tasks.keys()
             try:
                 if value._task in dep_tasks:
                     return [value]
@@ -1738,6 +1740,82 @@ class ArgumentParams(Parameters):
         for task in dep_tasks:
             args.extend(task.args._get_non_squeezed_args(sq_args))
         return args
+
+    def _get_depending_args(self, sq_paths=None, pre_tasks=None, all=0):
+        if sq_paths is None:
+            sq_paths = []
+        if pre_tasks is None:
+            pre_tasks = []
+        dep_tasks = set()
+        paths = []
+        #~ print('*** {} ***'.format(self._task))
+        #~ print('sq_paths:', sq_paths)
+        for name, arg in self:
+            arg_path = pre_tasks + [arg]
+            #~ print('arg_path:', arg_path)
+            if arg_path in sq_paths:
+                sq_paths.remove(arg_path)
+                continue
+            tasks = arg._tasks
+            if tasks:
+                dep_tasks.update(tasks)
+                if all:
+                    paths.append([arg])
+            else:
+                # local arg
+                paths.append([arg])
+        pre_tasks = list(pre_tasks)
+        pre_tasks.append(self._task)
+        for task in dep_tasks:
+            dep_paths = task.args._get_depending_args(
+                sq_paths,
+                pre_tasks,
+                all=all,
+            )
+            for path in dep_paths:
+                path.insert(0, self._task)
+            paths += dep_paths
+        return paths
+
+    def _get_key_paths(self, squeeze=''):
+        squeeze = self._get(squeeze)
+        for sq_arg in squeeze:
+            if isinstance(sq_arg, Argument):
+                squeeze.remove(sq_arg)
+                squeeze_with_zipped_args = []
+                for arg in sq_arg._task.args._get_zipped_args(sq_arg):
+                    squeeze_with_zipped_args.append([arg] + squeeze)
+                squeeze = squeeze_with_zipped_args
+                break
+        #~ print('squeeze', squeeze)
+        arg_paths = sorted(self._get_depending_args(all=1), key=len)
+        sq_paths = []
+        for sq_path in squeeze:
+            #~ print('sq_path:', sq_path)
+            for arg_path in arg_paths:
+                #~ print('arg_path:', arg_path)
+                if all(item in arg_path for item in sq_path):
+                    sq_paths.append(arg_path)
+                    break
+        #~ print('sq_paths:', sq_paths)
+        key_paths = self._get_depending_args(list(sq_paths))
+        # transform tasks in path into proper args
+        key_paths = self._task_paths_to_arg_paths(key_paths)
+        sq_paths = self._task_paths_to_arg_paths(sq_paths)
+        return key_paths, sq_paths
+
+    @staticmethod
+    def _task_paths_to_arg_paths(task_paths):
+        arg_paths = []
+        for path in task_paths:
+            arg = path[-1]
+            arg_path = [arg]
+            for task in path[-2::-1]:
+                #~ print('   ', arg, task)
+                arg = task.depend_tasks[arg._task][0]
+                arg_path.insert(0, arg)
+            arg_paths.append(arg_path)
+        return arg_paths
 
     def _add_sweeped_arg(self, arg):
         idx = max([0] + list(self._nested_args.values()))
