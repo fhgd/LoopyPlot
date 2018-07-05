@@ -1580,7 +1580,20 @@ class Parameters(ContainerNamespace):
             for item in value:
                 params += self._get(item)
             return params
-        elif value in ('', None):
+        else:
+            return self.__get(value)
+
+    def _get_path(self, value):
+        if isinstance(value, (tuple, list)):
+            params = []
+            for item in value:
+                params.append(self._get(item))
+            return params
+        else:
+            return self.__get(value)
+
+    def __get(self, value):
+        if value in ('', None):
             return []
         elif isinstance(value, str):
             return [self[name.strip()] for name in value.split(',')]
