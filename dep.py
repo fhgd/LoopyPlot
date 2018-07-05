@@ -47,14 +47,16 @@ noise.args.sigma.iterate(0.01, 0.05)
 noise.args.s.iterate(1, 5)
 noise.args.zip('sigma', 's')
 
-#~ noise.args.add_depending_task(zeros)
-#~ noise.args.b.depends_on_param(zeros.returns.b)
+noise.args.add_depending_task(zeros)
+noise.args.b.depends_on_param(zeros.returns.b)
+
+
 
 if 1:
     noise.plot(poly.args.x, 'y')
     noise.plot(poly.args.x, 'x', accumulate=['x', zeros.args.mid])
 
-if 1:
+if 0:
     zeros.run()
     poly.run()
     noise.run()
