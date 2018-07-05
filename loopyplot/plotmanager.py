@@ -843,6 +843,11 @@ class LineManager:
         # ToDo: results could be cached, maybe in self._keys (cidx: key)
         keys = []
         for path in self._key_path:
+            if (not self.squeeze
+                and path[0] is not self.ypath[0]
+                and self.ypath[0] in self.task.args):
+                    keys.append(None)
+                    continue
             cidx = self.task.get_cidx_from_path(path, cidx)
             keys.append(path[-1].get_arg_state(cidx))
         return tuple(keys)
