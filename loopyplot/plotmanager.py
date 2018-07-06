@@ -630,11 +630,11 @@ class PlotManager:
         arg_labels = []
         # add squeezed args
         for path in lmngr.squeeze:
-            if tuple(path) in _params or len(arg._states) <= 1:
+            if tuple(path) in _params or len(path[-1]._states) <= 1:
                 continue
             name = self._path_to_short_label(path, lmngr.task)
             _cidx = lmngr.task.get_cidx_from_path(path, cidxs[0])
-            val = path[-1].get_arg_state(_cidx)
+            val = path[-1].get_cache(_cidx)
             val_str = self._value_str(val)
             label = '{} = {}'.format(name, val_str)
             arg_labels.append(label)
