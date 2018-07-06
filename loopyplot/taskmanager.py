@@ -1779,6 +1779,14 @@ class ArgumentParams(Parameters):
             paths += dep_paths
         return paths
 
+    def _get_acc_paths(self, squeeze=''):
+        squeeze = self._get(squeeze)
+        squeeze = self._zipped_paths(squeeze)
+        sq_paths = self._guess_paths(squeeze)
+        # transform tasks in path into proper args
+        sq_paths = self._task_paths_to_arg_paths(sq_paths)
+        return sq_paths
+
     def _get_key_paths(self, squeeze=''):
         squeeze = self._get(squeeze)
         squeeze = self._zipped_paths(squeeze)

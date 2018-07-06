@@ -755,27 +755,29 @@ class LineManager:
         self.squeeze = sq_paths
         self._key_paths = key_paths
         # accumulate
-        """
-        accumulate
-            could be contain path or (param, via_arg_or_task)
-        """
-        #~ if accumulate is None and self.squeeze:
-            #~ accumulate = '*'
-        #~ if accumulate == '*':
-            #~ acc_args = self._key_args
-        #~ else:
-            #~ try:
-                #~ args = task.args._get(accumulate)
-            #~ except ValueError:
-                #~ msg = '{!r} not in key_args: {}'
-                #~ msg = msg.format(accumulate, self._key_args)
-                #~ raise ValueError(msg)
-            #~ acc_args = set(args)
-            #~ for arg in args:
-                #~ acc_args.update(task.args._get_zipped_args(arg))
-        #~ self.mask = [arg in acc_args for arg in self._key_args]
-        self.mask = [True for path in self._key_paths]
-        #~ self._acc_args = acc_args
+        if accumulate is None and self.squeeze:
+            accumulate = '*'
+        if accumulate == '*':
+            acc_paths = self._key_paths
+        else:
+            try:
+                arg_paths = task.args._get_paths(accumulate)
+                self._arg_paths = arg_paths
+            except ValueError:
+                msg = '{!r} not in key_args: {}'
+                msg = msg.format(accumulate, self._key_args)
+                raise ValueError(msg)
+            acc_paths = []
+            for path in arg_paths:
+                #~ print('    path:', path)
+                _task_paths = task.args._zipped_paths(path)
+                #~ print('    zipped path:', _task_paths)
+                _task_paths = task.args._get_acc_paths(_task_paths)
+                #~ print('    get_acc_path:', _task_paths)
+                acc_paths += _task_paths
+            #~ self._acc_paths_pre = acc_paths
+        self._acc_paths = acc_paths
+        self.mask = [path in acc_paths for path in self._key_paths]
 
         self.lines = {}     # key: line
         self.cidxs = {}     # line: [cidx, ...]
