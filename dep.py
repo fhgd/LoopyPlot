@@ -58,8 +58,10 @@ if 1:
 
 if 1:
     noise.plot(poly.args.x, 'y')
-if 0:
-    noise.plot(poly.args.x, 'x', accumulate=['x', zeros.args.mid])
+if 1:
+    #~ noise.plot(poly.args.x, 'x', accumulate='')
+    noise.plot(poly.args.x, 'x', accumulate=[[zeros.args.mid, poly]])
+    #~ lm = noise.pm.lms[0, 0, 0][noise][1]
 
 
 
