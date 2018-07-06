@@ -1583,14 +1583,14 @@ class Parameters(ContainerNamespace):
         else:
             return self.__get(value)
 
-    def _get_path(self, value):
+    def _get_paths(self, value):
         if isinstance(value, (tuple, list)):
             params = []
             for item in value:
                 params.append(self._get(item))
             return params
         else:
-            return self.__get(value)
+            return [self.__get(value)]
 
     def __get(self, value):
         dep_tasks = self._task.depend_tasks.keys()
@@ -1601,6 +1601,8 @@ class Parameters(ContainerNamespace):
         elif value in self._params.values():
             return [value]
         elif value in dep_tasks:
+            return [value]
+        elif value is self._task:
             return [value]
         else:
             try:
