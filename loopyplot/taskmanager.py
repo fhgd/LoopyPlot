@@ -2315,7 +2315,7 @@ class Task(BaseSweepIterator):
 
         args = ArgumentParams(task=self)
         for n, d in defaults.items():
-            unit = func.__annotations__.get(n, '')
+            unit = func.__annotations__.get(n, None)
             args._append(n, Argument(n, d, unit, task=self))
         self.args = args
 

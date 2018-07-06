@@ -210,7 +210,7 @@ class PlotManager:
             ylabel = self._path_to_short_label(ypath, task)
             self.ylabel(task, ylabel, yunit, row, col)
         else:
-            ylabel = self._path_to_label(ypath, task, format='long')
+            ylabel = self._path_to_short_label(ypath, task)
             self.ylabel(task, ylabel, yunit, row, col,
                         rotation='vertical',
                         horizontalalignment='center')
@@ -270,8 +270,10 @@ class PlotManager:
         key = view, row, col, 'y'
         if (label or unit) and key not in self.labels:
             self.labels[key] = label, unit, kwargs
+            log.debug('key is new:', key)
         elif (label or unit) and unit == self.labels[key][1]:
             self.labels[key] = '', unit, kwargs
+            log.debug('key has same units but different labels')
         elif (label or unit) and unit != self.labels[key][1]:
             msg = 'view={}, row={}, col={}: try to set ' \
                   'ylabel={!r} / {!r} but {!r} / {!r} ' \
@@ -309,14 +311,12 @@ class PlotManager:
                 try:
                     ylabel, yunit, args = self.labels[view, row, col, 'y']
                     if yunit:
-                        ylabel = ylabel.replace('$', '')
                         if ylabel:
                             if args['rotation'] == 'horizontal':
+                                ylabel = ylabel.replace('$', '')
                                 fmt = r'$\dfrac{{{}}}{{\mathsf{{{}}}}}$'
-                            elif '|' in ylabel:
-                                fmt = '{} / {}'
                             else:
-                                fmt = r'${}$ / {}'
+                                fmt = r'{} / {}'
                             ylabel = fmt.format(ylabel, yunit)
                         else:
                             ylabel = '[{}]'.format(yunit)

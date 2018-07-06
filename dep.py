@@ -34,8 +34,8 @@ poly.args.b.depends_on_param(zeros.returns.b)
 #~ print(df)
 
 @Task
-def noise(x, sigma=0.2, s=0.1, a=0, b=1):
-    y = random.gauss(x, sigma*s)
+def noise(x: 'cm', sigma=0.2, s=0.1, a=0, b=1):
+    y: 'cm' = random.gauss(x, sigma*s)
     return y
 
 #~ noise.args.x.sweep(0, 5, step=poly.returns.y)
