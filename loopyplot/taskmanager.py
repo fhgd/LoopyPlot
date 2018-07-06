@@ -1779,15 +1779,15 @@ class ArgumentParams(Parameters):
 
     def _get_key_paths(self, squeeze=''):
         squeeze = self._get(squeeze)
-        for sq_arg in squeeze:
-            if isinstance(sq_arg, Argument):
-                squeeze.remove(sq_arg)
-                squeeze_with_zipped_args = []
-                for arg in sq_arg._task.args._get_zipped_args(sq_arg):
-                    squeeze_with_zipped_args.append([arg] + squeeze)
-                squeeze = squeeze_with_zipped_args
-                break
-        #~ print('squeeze', squeeze)
+        squeeze = self._zipped_paths(squeeze)
+        sq_paths = self._guess_paths(squeeze)
+        key_paths = self._get_depending_args(list(sq_paths))
+        # transform tasks in path into proper args
+        key_paths = self._task_paths_to_arg_paths(key_paths)
+        sq_paths = self._task_paths_to_arg_paths(sq_paths)
+        return key_paths, sq_paths
+
+    def _guess_paths(self, squeeze):
         arg_paths = sorted(self._get_depending_args(all=1), key=len)
         sq_paths = []
         for sq_path in squeeze:
@@ -1797,12 +1797,20 @@ class ArgumentParams(Parameters):
                 if all(item in arg_path for item in sq_path):
                     sq_paths.append(arg_path)
                     break
-        #~ print('sq_paths:', sq_paths)
-        key_paths = self._get_depending_args(list(sq_paths))
-        # transform tasks in path into proper args
-        key_paths = self._task_paths_to_arg_paths(key_paths)
-        sq_paths = self._task_paths_to_arg_paths(sq_paths)
-        return key_paths, sq_paths
+        return list(sq_paths)
+
+    @staticmethod
+    def _zipped_paths(task_path):
+        task_path = list(task_path)
+        task_path_with_zipped_args = []
+        for sq_arg in task_path:
+            if isinstance(sq_arg, Argument):
+                task_path.remove(sq_arg)
+                task_path_with_zipped_args = []
+                for arg in sq_arg._task.args._get_zipped_args(sq_arg):
+                    task_path_with_zipped_args.append([arg] + task_path)
+                break
+        return task_path_with_zipped_args
 
     @staticmethod
     def _task_paths_to_arg_paths(task_paths):
