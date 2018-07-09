@@ -1454,6 +1454,8 @@ class Argument:
             self._ptrs.append(ptr)
         else:
             self._ptr = ptr
+        self._task.args._tasksweep_args[self] = ptr._tasksweep
+        ptr._tasksweep.args.append(self)
         self._task.args._add_sweeped_arg(self)
         args = self._task.args._last_tasksweep_args
         args.append(self)
@@ -1464,10 +1466,22 @@ class Argument:
 class TaskSweep(BaseSweepIterator):
     def __init__(self, task, squeeze=''):
         self.task = task
-        self.squeeze = squeeze
+        self.squeeze = squeeze if squeeze else []
+        self.args = []
         self.clen = 0
         self.last_clen = 0
         super().__init__()
+
+        # cache
+        self._keys = []
+
+    def __repr__(self):
+        args = []
+        args.append(repr(self.task))
+        args.append('squeeze={!r}'.format(self.squeeze))
+        return "{classname}({args})".format(
+            classname=self.__class__.__name__,
+            args=', '.join(args))
 
     def get_value(self, idx):
         cidx = self.last_clen + idx
@@ -1480,7 +1494,27 @@ class TaskSweep(BaseSweepIterator):
         if self.clen != self.task.clen:
             self.last_clen = self.clen
             self.clen = self.task.clen
+            self._keys = self.get_key_paths()
         #~ self.idx = 0
+
+    def get_key_paths(self, squeezed_paths=[]):
+        sq_paths = self.squeeze + squeezed_paths
+        paths = []
+        for name, arg in self.task.args:
+            arg_path = [arg]
+            if arg_path in sq_paths:
+                continue
+            if arg not in self.task.args._tasksweep_args.keys():
+                # arg is local argument
+                paths.append(arg_path)
+            else:
+                # arg is depending argument
+                tasksweep = self.task.args._tasksweep_args[arg]
+                for path in tasksweep.get_key_paths(sq_paths):
+                    full_path = [self.task] + path
+                    if full_path not in sq_paths:
+                        paths.append(full_path)
+        return paths
 
 
 class DependParamPointer:
@@ -1637,6 +1671,7 @@ class ArgumentParams(Parameters):
         self._nested = Nested()
         self._nested_args = {}
         self._tasksweeps = {}           # task: tasksweep
+        self._tasksweep_args = {}       # arg:  tasksweep
 
         # used as cache for configuration
         self._last_tasksweep = None
