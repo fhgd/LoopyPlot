@@ -618,7 +618,9 @@ def _value_str(value):
     elif isinstance(value, tuple):
         return '({:.4g}, ...)'.format(value[0])
     elif isinstance(value, np.ndarray):
-        return 'array([{:.4g}, ...])'.format(value[0])
+        with NumpyPrettyPrint(precision=2, threshold=5, edgeitems=1):
+            value_str = repr(value)
+        return value_str
     else:
         return repr(value)
 
@@ -1496,6 +1498,21 @@ class Parameters(ContainerNamespace):
             raise ValueError(msg)
 
 
+class NumpyPrettyPrint():
+    """from
+    https://stackoverflow.com/questions/38050643/local-scope-for-numpy-set-printoptions
+    """
+    def __init__(self, **options):
+        self.options = options
+
+    def __enter__(self):
+        self.back = np.get_printoptions()
+        np.set_printoptions(**self.options)
+
+    def __exit__(self, *args):
+        np.set_printoptions(**self.back)
+
+
 class ArgumentParams(Parameters):
     def __init__(self, task=None):
         super().__init__(task)
@@ -1504,10 +1521,14 @@ class ArgumentParams(Parameters):
 
     def __repr__(self):
         maxlen = max([0] + [len(param._uname) for name, param in self])
-        fmtstr = '{{:>{maxlen}}} = {{}}'.format(maxlen=maxlen)
+        fmtstr = '{{:>{maxlen}}} = '.format(maxlen=maxlen)
         lines = []
         for name, param in self:
-            line = fmtstr.format(param._uname, _value_str(param.value))
+            line = fmtstr.format(param._uname)
+            val_str = _value_str(param.value).split('\n')
+            gap = '\n' + ' ' * len(line)
+            val_str = gap.join(val_str)
+            line += '{}'.format(val_str)
             ptr = param._ptr
             if isinstance(ptr, (SweepPointer, SweepFactoryPointer)):
                 if len(param._ptrs._pointers) == 1:
