@@ -53,15 +53,15 @@ def test_get_key_paths_2(task_setup):
 def test_get_key_paths_3(task_setup):
     one, two, three = task_setup
 
-    three.args.add_depending_task(two, squeeze=[[two, one.args.x]])
+    three.args.add_depending_task(two, squeeze=[[two.args.x, one.args.x]])
     three.args.x1.depends_on_param(two.args.offs)
 
     tasksweep = three.args._tasksweeps[two]
-    assert tasksweep.squeeze == [[two, one.args.x]]
+    assert tasksweep.squeeze == [[two.args.x, one.args.x]]
     key_paths = tasksweep.get_key_paths()
     assert key_paths == [
-        [two, one.args.gain],
-        [two, one.args.offs],
+        [two.args.x, one.args.gain],
+        [two.args.x, one.args.offs],
         [two.args.offs]]
 
 
@@ -69,15 +69,15 @@ def test_get_key_paths_4(task_setup):
     one, two, three = task_setup
 
     three.args.add_depending_task(two, squeeze=[
-        [two, one.args.offs],
+        [two.args.x, one.args.offs],
         [two.args.offs],
     ])
     three.args.x1.depends_on_param(two.args.offs)
 
     tasksweep = three.args._tasksweeps[two]
-    assert tasksweep.squeeze == [[two, one.args.offs], [two.args.offs]]
+    assert tasksweep.squeeze == [[two.args.x, one.args.offs], [two.args.offs]]
     key_paths = tasksweep.get_key_paths()
-    assert key_paths == [[two, one.args.gain]]
+    assert key_paths == [[two.args.x, one.args.gain]]
 
 
 @pytest.fixture

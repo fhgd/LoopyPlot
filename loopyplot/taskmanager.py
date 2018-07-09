@@ -1500,20 +1500,22 @@ class TaskSweep(BaseSweepIterator):
     def get_key_paths(self, squeezed_paths=[]):
         sq_paths = self.squeeze + squeezed_paths
         paths = []
+        _tasksweeps = set()
         for name, arg in self.task.args:
             arg_path = [arg]
-            if arg_path in sq_paths:
-                continue
-            if arg not in self.task.args._tasksweep_args.keys():
-                # arg is local argument
-                paths.append(arg_path)
-            else:
+            if arg in self.task.args._tasksweep_args.keys():
                 # arg is depending argument
                 tasksweep = self.task.args._tasksweep_args[arg]
+                if arg_path in sq_paths or tasksweep in _tasksweeps:
+                    continue
+                _tasksweeps.add(tasksweep)
                 for path in tasksweep.get_key_paths(sq_paths):
-                    full_path = [self.task] + path
+                    full_path = [arg] + path
                     if full_path not in sq_paths:
                         paths.append(full_path)
+            elif arg_path not in sq_paths:
+                # arg is local argument
+                paths.append(arg_path)
         return paths
 
 
