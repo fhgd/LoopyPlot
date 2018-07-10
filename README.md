@@ -124,7 +124,9 @@ Currently, LoopyPlot is ...
 * in *alpha* stage looking for *user feedback*
 
 in order to reach the vision of coding your experiments in a
-*readable* and *reuseable* manner.
+*readable* and *reuseable* manner. Since LoopyPlot mainly focuses on
+experimental measurements speed is not an issue for development
+right now.
 
 Open issues before first beta release 0.1:
 * docstings
