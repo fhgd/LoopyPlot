@@ -2571,6 +2571,8 @@ class Task(BaseSweepIterator):
                     msg = 'task {} != {}'.format(task, arg._task)
                     raise ValueError(msg)
                 cidx = arg.get_depend_cidx(cidx)
+                if isinstance(cidx, list):
+                    cidx = cidx[0]
         return cidx
 
     # ToDo: should be in self.args
