@@ -874,7 +874,11 @@ class LineManager:
                     keys.append(None)
                     continue
             _cidx = self.task.get_cidx_from_path(path, cidx)
-            keys.append(path[-1].get_arg_state(_cidx))
+            try:
+                state = path[-1].get_arg_state(_cidx[0])
+            except TypeError:
+                state = path[-1].get_arg_state(_cidx)
+            keys.append(state)
         return tuple(keys)
 
     def update(self):
