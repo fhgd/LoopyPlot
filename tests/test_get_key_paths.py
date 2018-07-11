@@ -42,7 +42,7 @@ def test_get_key_paths_2(task_setup):
     one, two, three = task_setup
 
     three.add_dependency(two, squeeze=[[two.args.x]])
-    three.args.x1.depends_on_param(two.args.offs)
+    three.args.x1.depends_on(two.args.offs)
 
     tasksweep = three.args._tasksweeps[two]
     assert tasksweep.squeeze == [[two.args.x]]
@@ -54,7 +54,7 @@ def test_get_key_paths_3(task_setup):
     one, two, three = task_setup
 
     three.add_dependency(two, squeeze=[[two.args.x, one.args.x]])
-    three.args.x1.depends_on_param(two.args.offs)
+    three.args.x1.depends_on(two.args.offs)
 
     tasksweep = three.args._tasksweeps[two]
     assert tasksweep.squeeze == [[two.args.x, one.args.x]]
@@ -72,7 +72,7 @@ def test_get_key_paths_4(task_setup):
         [two.args.x, one.args.offs],
         [two.args.offs],
     ])
-    three.args.x1.depends_on_param(two.args.offs)
+    three.args.x1.depends_on(two.args.offs)
 
     tasksweep = three.args._tasksweeps[two]
     assert tasksweep.squeeze == [[two.args.x, one.args.offs], [two.args.offs]]
@@ -98,8 +98,8 @@ def task_setup():
         y = x**2 + offs
         return y
     two.add_dependency(one, squeeze=[[one.args.x]])
-    two.args.x.depends_on_param(one.returns.y)
-    #~ two.args.a.depends_on_param(one.args.offs)
+    two.args.x.depends_on(one.returns.y)
+    #~ two.args.a.depends_on(one.args.offs)
     two.args.offs.iterate(0, 10)
 
     @Task
@@ -107,6 +107,6 @@ def task_setup():
         y = x1 * sum(x2) + x3
         return y
     three.add_dependency(one, squeeze=[[one.args.offs]])
-    three.args.x2.depends_on_param(one.returns.y)
+    three.args.x2.depends_on(one.returns.y)
 
     return one, two, three

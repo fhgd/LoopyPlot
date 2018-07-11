@@ -20,8 +20,8 @@ def poly(x, a=0, b=0):
 
 poly.args.x.sweep(0, 2, num=25)
 poly.add_dependency(zeros)
-poly.args.a.depends_on_param(zeros.returns.a)
-poly.args.b.depends_on_param(zeros.returns.b)
+poly.args.a.depends_on(zeros.returns.a)
+poly.args.b.depends_on(zeros.returns.b)
 #~ poly.args.b.iterate(1.25)
 #~ poly.args.b.iterate(1.25, 1.75)
 #~ poly.args.b.iterate(0.5, 2)
@@ -40,11 +40,11 @@ def noise(x: 'cm', sigma=0.2, s=0.1, a=0, b=1):
 
 #~ noise.args.x.sweep(0, 5, step=poly.returns.y)
 noise.add_dependency(poly)
-noise.args.x.depends_on_param(poly.returns.y)
-noise.args.a.depends_on_param(poly.args.a)
+noise.args.x.depends_on(poly.returns.y)
+noise.args.a.depends_on(poly.args.a)
 
 noise.add_dependency(zeros)
-noise.args.sigma.depends_on_param(zeros.returns.a)
+noise.args.sigma.depends_on(zeros.returns.a)
 
 #~ noise.args.sigma.iterate(0.01, 0.05)
 #~ noise.args.sigma.iterate(0.01, 0.05)
