@@ -1816,13 +1816,6 @@ class ArgumentParams(Parameters):
             levels.setdefault(level, []).append(arg)
         return levels
 
-    def add_depending_task(self, task, squeeze=''):
-        if task not in self._tasksweeps:
-            tasksweep = TaskSweep(task, squeeze)
-            self._tasksweeps[task] = tasksweep
-        self._last_tasksweep = self._tasksweeps[task]
-        self._last_tasksweep_args = []
-
     def _get_non_squeezed_args(self, sq_args):
         dep_tasks = set()
         args = []
@@ -2656,6 +2649,13 @@ class Task(BaseSweepIterator):
         if not plot_update:
             self.plot_update()
         plotmanager.log.level = plevel
+
+    def add_dependency(self, task, squeeze=''):
+        if task not in self.args._tasksweeps:
+            tasksweep = TaskSweep(task, squeeze)
+            self.args._tasksweeps[task] = tasksweep
+        self.args._last_tasksweep = self.args._tasksweeps[task]
+        self.args._last_tasksweep_args = []
 
     @property
     def depend_tasks(self):

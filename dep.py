@@ -19,7 +19,7 @@ def poly(x, a=0, b=0):
     return y
 
 poly.args.x.sweep(0, 2, num=25)
-poly.args.add_depending_task(zeros)
+poly.add_dependency(zeros)
 poly.args.a.depends_on_param(zeros.returns.a)
 poly.args.b.depends_on_param(zeros.returns.b)
 #~ poly.args.b.iterate(1.25)
@@ -39,11 +39,11 @@ def noise(x: 'cm', sigma=0.2, s=0.1, a=0, b=1):
     return y
 
 #~ noise.args.x.sweep(0, 5, step=poly.returns.y)
-noise.args.add_depending_task(poly)
+noise.add_dependency(poly)
 noise.args.x.depends_on_param(poly.returns.y)
 noise.args.a.depends_on_param(poly.args.a)
 
-noise.args.add_depending_task(zeros)
+noise.add_dependency(zeros)
 noise.args.sigma.depends_on_param(zeros.returns.a)
 
 #~ noise.args.sigma.iterate(0.01, 0.05)
