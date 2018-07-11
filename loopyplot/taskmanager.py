@@ -1472,8 +1472,11 @@ class TaskSweep(BaseSweepIterator):
         self.last_clen = 0
         super().__init__()
 
-        # cache
-        self._keys = []
+        # used for caching
+        self._key_paths = []
+        self._cidxs = []    # loop over cidxs of task
+        self._states = {}   # (last_clen, clen): [{cidxs_of_this_key}, ..]
+                            #                     cidx_of_key
 
     def __repr__(self):
         args = []
@@ -1484,18 +1487,32 @@ class TaskSweep(BaseSweepIterator):
             args=', '.join(args))
 
     def get_value(self, idx):
-        cidx = self.last_clen + idx
-        return cidx
+        cidx = self._cidxs[idx]
+        return self.last_clen, self.clen, cidx
 
     def __len__(self):
-        return self.clen - self.last_clen
+        return len(self._cidxs)
 
     def configure(self):
         if self.clen != self.task.clen:
             self.last_clen = self.clen
             self.clen = self.task.clen
-            self._keys = self.get_key_paths()
-        #~ self.idx = 0
+            self._key_paths = self.get_key_paths()
+            self._cidxs = self.create_states(self.last_clen, self.clen)
+            self.idx = 0
+
+    def create_states(self, last_clen, clen):
+        states = []
+        cidxs = []
+        keys = {}
+        for cidx in range(last_clen, clen):
+            key = self.get_key(cidx)
+            if key not in keys.keys():
+                cidxs.append(cidx)
+            keys.setdefault(key, set()).add(cidx)
+            states.append(keys[key])
+        self._states[self.last_clen, self.clen] = states
+        return cidxs
 
     def get_key_paths(self, squeezed_paths=[]):
         sq_paths = self.squeeze + squeezed_paths
@@ -1518,6 +1535,41 @@ class TaskSweep(BaseSweepIterator):
                 paths.append(arg_path)
         return paths
 
+    def _get_cidx_from_path(self, path, cidx):
+        try:
+            return [self._get_cidx_from_path(path, idx) for idx in cidx]
+        except TypeError:
+            task = path[0]._task
+            for arg in path[:-1]:
+                if task == arg._task:
+                    task = arg._ptr.task
+                else:
+                    msg = 'task {} != {}'.format(task, arg._task)
+                    raise ValueError(msg)
+                cidx = arg.get_depend_cidx(cidx)
+        return cidx
+
+    def get_key(self, cidx):
+        if not self._key_paths:
+            self._key_paths = self.get_key_paths()
+        states = []
+        for path in self._key_paths:
+            _cidx = self._get_cidx_from_path(path, cidx)
+            try:
+                state = path[-1].get_arg_state(_cidx[0])
+            except TypeError:
+                state = path[-1].get_arg_state(_cidx)
+            states.append(state)
+        return tuple(states)
+
+    def get_cidxs(self, last_clen, clen, cidx):
+        if (last_clen, clen) not in self._states:
+            msg = '{!r}: create states for (last_clen, clen) = ({}, {})'
+            msg = msg.format(self, last_clen, clen)
+            log.warning(msg)
+            self.create_states(last_clen, clen)
+        return sorted(self._states[last_clen, clen][cidx - last_clen])
+
 
 class DependParamPointer:
     def __init__(self, param, tasksweep):
@@ -1528,12 +1580,15 @@ class DependParamPointer:
 
     @property
     def state(self):
-        cidx = self._tasksweep.value
-        return cidx
+        return self._tasksweep.value
 
     def get_value(self, state):
         try:
-            return self._param.get_cache(state)
+            cidxs = self._tasksweep.get_cidxs(*state)
+            if len(cidxs) > 1:
+                return np.array(self._param.get_cache(cidxs))
+            else:
+                return self._param.get_cache(cidxs[0])
         except IndexError:
             msg = 'warning: no results from task {}, try {}.run()'
             task = self._param._task
@@ -1560,7 +1615,11 @@ class DependParamPointer:
         return self._tasksweep.task
 
     def get_task_cidx(self, state):
-        return state
+        return self._tasksweep.get_cidxs(*state)
+
+    @property
+    def _squeeze(self):
+        return self._tasksweep.squeeze
 
 
 class ContainerNamespace:
@@ -2758,7 +2817,7 @@ class Task(BaseSweepIterator):
         if cidx is None:
             cidx = range(self.clen)
         try:
-            return [self.get_value_from_path(path, idx) for idx in cidx]
+            return [self.get_cidx_from_path(path, idx) for idx in cidx]
         except TypeError:
             task = self
             for arg in path[:-1]:
