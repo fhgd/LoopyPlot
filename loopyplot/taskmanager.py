@@ -2490,6 +2490,16 @@ class Task(BaseSweepIterator):
                 args += [narg for narg in newargs if narg not in args]
         return tasks
 
+    def _path_to_label(self, path):
+        if not path:
+            return ''
+        label = []
+        for arg in path:
+            if arg._task is not self:
+                label.append(arg._task.name)
+        label.append(arg._uname)
+        return '|'.join(label)
+
     def get_path(self, param, via_args=[]):
         via = set(via_args)
         tasks = self.depend_tasks
