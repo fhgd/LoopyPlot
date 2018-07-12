@@ -1288,26 +1288,10 @@ class TaskSweep(BaseSweepIterator):
             self._key_paths = self.get_arg_paths()
         states = []
         for path in self._key_paths:
-            _cidx = self._get_cidx_from_depending_task(path, cidx)
+            _cidx = self.task._get_cidx_from_depending_task(path, cidx)
             state = path[-1].get_arg_state(_cidx)
             states.append(state)
         return tuple(states)
-
-    def _get_cidx_from_depending_task(self, path, cidx):
-        task = path[0]._task
-        for arg in path[:-1]:
-            # just to be sure
-            if task != arg._task:
-                msg = 'task {} != {}'.format(task, arg._task)
-                raise ValueError(msg)
-            task = arg._ptr.task
-            cidx = arg.get_depend_cidx(cidx)
-            # if len(cidx) > 1 then arg has a squeezed dependency
-            # and since the squeezed arg is not in _key_paths
-            # we can just pick the first item from cidx because all
-            # other items in cidx pointing to the same state (value)
-            cidx = cidx[0]
-        return cidx
 
     def get_cidxs(self, last_clen, clen, cidx):
         if (last_clen, clen) not in self._states:
@@ -2540,6 +2524,22 @@ class Task(BaseSweepIterator):
                     arg = args[0]
                 params.insert(0, arg)
         return params
+
+    def _get_cidx_from_depending_task(self, arg_path, cidx):
+        task = arg_path[0]._task
+        for arg in arg_path[:-1]:
+            # just to be sure
+            if task != arg._task:
+                msg = 'task {} != {}'.format(task, arg._task)
+                raise ValueError(msg)
+            task = arg._ptr.task
+            cidx = arg.get_depend_cidx(cidx)
+            # if len(cidx) > 1 then arg has a squeezed dependency
+            # and since the squeezed arg is not in _key_paths
+            # we can just pick the first item from cidx because all
+            # other items in cidx pointing to the same state (value)
+            cidx = cidx[0]
+        return cidx
 
     def _get_argpath(self, value):
         if value in ('', None):
