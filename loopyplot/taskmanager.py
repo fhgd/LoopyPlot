@@ -1720,27 +1720,24 @@ class ArgumentParams(Parameters):
     def _is_finished(self):
         return not self._is_running()
 
-    def as_table(self, cidx=None, include=[], hide_const=False,
-                 as_df=True):
+    def as_table(self, include_dep_args=True, hide_const=False,
+                 as_df=True, cidx=None):
         if isinstance(cidx, int):
             cidx = [cidx]
         params = OrderedDict()
         for name, arg in self:
             if not hide_const or len(arg._states) > 1:
                 params[arg._uname] = arg.get_cache(cidx)
-        for param in include:
-            if isinstance(param, (list, tuple)):
-                param, via = param[0], param[1:]
-            else:
-                via = []
-            path = self._task.get_path(param, via)
-            values = self._task.get_value_from_path(path, cidx)
-            name = '{}.{}.{}'.format(
-                param._task.name,
-                'args' if isinstance(param, Argument) else 'results',
-                param._uname
-            )
-            params[name] = values
+
+        for path in self._get_arg_paths():
+            if len(path) <= 1 or not include_dep_args:
+                continue
+            values = []
+            for idx in range(self._task.clen):
+                _cidx = self._task._get_cidx_from_depending_task(path, idx)
+                values.append(path[-1].get_cache(_cidx))
+            params[self._task._path_to_label(path)] = values
+
         if cidx:
             params['cidx'] = list(cidx)
         if not as_df:
@@ -1929,8 +1926,8 @@ class ReturnParams(Parameters):
             lines.append(line)
         return '\n'.join(lines)
 
-    def as_table(self, include_args=True, include=[], hide_const=False,
-                 as_df=True, cidx=None):
+    def as_table(self, include_args=True, include_dep_args=False,
+                 hide_const=False, as_df=True, cidx=None):
         if isinstance(cidx, int):
             cidx = [cidx]
         params = OrderedDict()
@@ -1943,22 +1940,18 @@ class ReturnParams(Parameters):
                     or self._task.clen < 2
                 ):
                     params[arg._uname] = arg.get_cache(cidx)
+
+        for path in self._task.args._get_arg_paths():
+            if len(path) <= 1 or not include_dep_args:
+                continue
+            values = []
+            for idx in range(self._task.clen):
+                _cidx = self._task._get_cidx_from_depending_task(path, idx)
+                values.append(path[-1].get_cache(_cidx))
+            params[self._task._path_to_label(path)] = values
+
         for name, result in self._task.returns:
             params[result._uname] = result.get_cache(cidx)
-        for param in include:
-            if isinstance(param, (list, tuple)):
-                param, via = param[0], param[1:]
-                via = self._task.args._get(via)
-            else:
-                via = []
-            path = self._task.get_path(param, via)
-            values = self._task.get_value_from_path(path, cidx)
-            name = '{}.{}.{}'.format(
-                param._task.name,
-                'args' if isinstance(param, Argument) else 'results',
-                param._uname
-            )
-            params[name] = values
         if cidx:
             params['cidx'] = list(cidx)
         if not as_df:
