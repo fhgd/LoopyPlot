@@ -1283,6 +1283,40 @@ class TaskSweep(BaseSweepIterator):
         self._states[self.last_clen, self.clen] = states
         return cidxs
 
+    def get_key(self, cidx):
+        if not self._key_paths:
+            self._key_paths = self.get_key_paths()
+        states = []
+        for path in self._key_paths:
+            _cidx = self._get_cidx_from_depending_task(path, cidx)
+            state = path[-1].get_arg_state(_cidx)
+            states.append(state)
+        return tuple(states)
+
+    def _get_cidx_from_depending_task(self, path, cidx):
+        task = path[0]._task
+        for arg in path[:-1]:
+            # just to be sure
+            if task != arg._task:
+                msg = 'task {} != {}'.format(task, arg._task)
+                raise ValueError(msg)
+            task = arg._ptr.task
+            cidx = arg.get_depend_cidx(cidx)
+            # if len(cidx) > 1 then arg has a squeezed dependency
+            # and since the squeezed arg is not in _key_paths
+            # we can just pick the first item from cidx because all
+            # other items in cidx pointing to the same state (value)
+            cidx = cidx[0]
+        return cidx
+
+    def get_cidxs(self, last_clen, clen, cidx):
+        if (last_clen, clen) not in self._states:
+            msg = '{!r}: create states for (last_clen, clen) = ({}, {})'
+            msg = msg.format(self, last_clen, clen)
+            log.warning(msg)
+            self.create_states(last_clen, clen)
+        return sorted(self._states[last_clen, clen][cidx - last_clen])
+
     def get_key_paths(self, squeezed_paths=[]):
         sq_paths = self.squeeze + squeezed_paths
         paths = []
@@ -1303,41 +1337,6 @@ class TaskSweep(BaseSweepIterator):
                 # arg is local argument
                 paths.append(arg_path)
         return paths
-
-    def _get_cidx_from_path(self, path, cidx):
-        try:
-            return [self._get_cidx_from_path(path, idx) for idx in cidx]
-        except TypeError:
-            task = path[0]._task
-            for arg in path[:-1]:
-                if task == arg._task:
-                    task = arg._ptr.task
-                else:
-                    msg = 'task {} != {}'.format(task, arg._task)
-                    raise ValueError(msg)
-                cidx = arg.get_depend_cidx(cidx)
-        return cidx
-
-    def get_key(self, cidx):
-        if not self._key_paths:
-            self._key_paths = self.get_key_paths()
-        states = []
-        for path in self._key_paths:
-            _cidx = self._get_cidx_from_path(path, cidx)
-            try:
-                state = path[-1].get_arg_state(_cidx[0])
-            except TypeError:
-                state = path[-1].get_arg_state(_cidx)
-            states.append(state)
-        return tuple(states)
-
-    def get_cidxs(self, last_clen, clen, cidx):
-        if (last_clen, clen) not in self._states:
-            msg = '{!r}: create states for (last_clen, clen) = ({}, {})'
-            msg = msg.format(self, last_clen, clen)
-            log.warning(msg)
-            self.create_states(last_clen, clen)
-        return sorted(self._states[last_clen, clen][cidx - last_clen])
 
 
 class DependParamPointer:
