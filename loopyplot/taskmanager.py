@@ -870,165 +870,6 @@ class SweepPointer:
         return self._sweep
 
 
-class ParamPointer:
-    def __init__(self, param, squeeze=[]):
-        self._param = param
-        self._squeeze = squeeze
-        self._tstate = []
-
-    def __repr__(self):
-        args = ['{!r}'.format(self._param)]
-        if self._squeeze:
-            args.append('squeeze={!r}'.format(self._squeeze))
-        return "{classname}({args})".format(
-            classname=self.__class__.__name__,
-            args=', '.join(args))
-
-    @property
-    def clen(self):
-        return len(self._param._cache)
-        return self.task.clen
-
-    @property
-    def value(self):
-        task = self.task
-        if not self.clen:
-            msg = 'warning: task {} has no results'
-            msg = msg.format(task)
-            #~ log.warning(msg)
-            if not self._squeeze:
-                return self._param.value
-        if self.clen not in self._tstate:
-            self._tstate.append(self.clen)
-        idxs, _ = task.args.select_by_sweep(squeeze=self._squeeze)
-        if not idxs:
-            return np.nan
-        idxs = idxs[0]
-        if isinstance(idxs, list):
-            return np.array(self._param.get_cache(idxs))
-        else:
-            return self._param.get_cache(idxs)
-
-    @property
-    def state(self):
-        return self.clen
-
-    @state.setter
-    def state(self, value):
-        if value != self.clen:
-            msg = 'WARNING: state value = {} != {} = {}.clen of {!r}'
-            msg = msg.format(value, self.clen, self.task.name, self)
-            log.debug(msg)
-
-    def get_value(self, state):
-        task = self.task
-        if not self.clen:
-            msg = 'warning: task {} has no results, try {}.run()'
-            msg = msg.format(task, task.name)
-            log.warning(msg)
-        cidx = state - 1
-        idxs, _ = task.args.select_by_sweep(squeeze=self._squeeze,
-                                            cidx=cidx)
-        if not idxs:
-            return np.nan
-        idxs = idxs[0]
-        if isinstance(idxs, list):
-            return np.array(self._param.get_cache(idxs))
-        else:
-            return self._param.get_cache(idxs)
-
-    @property
-    def task(self):
-        return self._param._task
-
-    # ToDo: merge into self.get_value
-    def get_task_cidx(self, state):
-        task = self.task
-        cidx = state - 1
-        if cidx < 0:
-            msg = 'task {} has no results, try .run()'.format(task)
-            raise ValueError(msg)
-        idxs, _ = task.args.select_by_sweep(squeeze=self._squeeze,
-                                            cidx=cidx)
-        return idxs[0]
-
-
-class ParamSweepPointer:
-    def __init__(self, param, sweeps=[], squeeze=[]):
-        self._param = param
-        self._sweeps = sweeps
-        self._squeeze = squeeze
-        self._tstate = []
-        self._cidxs = {}
-        self._sweep = Sweep(0, 0)
-        self.configure()
-
-    def __repr__(self):
-        args = ['{!r}'.format(self._param)]
-        if self._squeeze:
-            args.append('squeeze={!r}'.format(self._squeeze))
-        if self._sweeps:
-            args.append('sweeps={!r}'.format(self._sweeps))
-        return "{classname}({args})".format(
-            classname=self.__class__.__name__,
-            args=', '.join(args))
-
-    def configure(self):
-        task = self.task
-        if not task.clen:
-            msg = 'warning: task {} has no results, try {}.run()'
-            msg = msg.format(task, task.name)
-            #~ log.warning(msg)
-        tstate = task.clen
-        if tstate not in self._cidxs:
-            cidxs, _ = task.args.select_by_sweep(self._sweeps,
-                                                 self._squeeze)
-            self._cidxs[tstate] = cidxs
-            self._tstate.append(tstate)
-            self._sweep = Sweep(0, len(cidxs) - 1)
-
-    @property
-    def state(self):
-        return len(self._tstate) - 1, self._sweep.value
-
-    def get_value(self, state):
-        tidx, sidx = state
-        tstate = self._tstate[tidx]
-        cidxs = self._cidxs[tstate]
-        if not cidxs:
-            msg = 'warning: no results from task {}, try {}.run()'
-            msg = msg.format(self.task, self.task.name)
-            log.warning(msg)
-            return np.nan
-        if not cidxs:
-            return np.nan
-        cidx = cidxs[sidx]
-        if isinstance(cidx, list):
-            return np.array(self._param.get_cache(cidx))
-        else:
-            return self._param.get_cache(cidx)
-
-    @property
-    def value(self):
-        return self.get_value(self.state)
-
-    @property
-    def sweep(self):
-        return self._sweep
-
-    @property
-    def task(self):
-        return self._param._task
-
-    # ToDo: merge into self.get_value
-    def get_task_cidx(self, state):
-        tidx, sidx = state
-        tstate = self._tstate[tidx]
-        cidxs = self._cidxs[tstate]
-        cidx = cidxs[sidx]
-        return cidx
-
-
 class SweepFactoryPointer:
     """ Like Sweep but accepts dependencies.
 
@@ -1686,15 +1527,6 @@ class ArgumentParams(Parameters):
                     ptr_repr = [ptr.sweep for ptr in sweep._pointers]
                 line += '\t({}/{}):\t{}'.format(sweep.idx + 1, len(sweep),
                                                 ptr_repr)
-            elif isinstance(ptr, ParamSweepPointer):
-                sweep = ptr.sweep
-                ptr_repr = 'from {!r}'.format(ptr._param)
-                if ptr._sweeps:
-                    ptr_repr += ', sweeps={!r}'.format(ptr._sweeps)
-                if ptr._squeeze:
-                    ptr_repr += ', squeeze={!r}'.format(ptr._squeeze)
-                line += '\t({}/{}):\t{}'.format(sweep.idx + 1, len(sweep),
-                                                ptr_repr)
             elif isinstance(ptr, DependParamPointer):
                 sweep = ptr.sweep
                 ptr_repr = 'from {!r}'.format(ptr._param)
@@ -1704,11 +1536,6 @@ class ArgumentParams(Parameters):
                     ptr_repr += ', squeeze {}'.format(squeeze_str)
                 line += '\t({}/{}):\t{}'.format(sweep.idx + 1, len(sweep),
                                                 ptr_repr)
-            elif isinstance(ptr, ParamPointer):
-                ptr_repr = 'from {!r}'.format(ptr._param)
-                if ptr._squeeze:
-                    ptr_repr += ', squeeze={!r}'.format(ptr._squeeze)
-                line += ':\t{}'.format(ptr_repr)
             lines.append(line)
         return '\n'.join(lines)
 
@@ -2416,22 +2243,11 @@ class Task(BaseSweepIterator):
                 else:
                     head = '{}/{}: '.format(sweep.idx + 1, len(sweep))
                     line = '{} = {}'.format(arg._uname, _value_str(value))
-                if isinstance(ptr, ParamSweepPointer):
-                    line += ':  from {!r}'.format(ptr._param)
-                    t = ptr._param._task
-                    if ptr._sweeps:
-                        _params = [repr(t.params[p]) for p in ptr._sweeps]
-                        _params = ', '.join(_params)
-                        line += ', sweeps={}'.format(_params)
-                    if ptr._squeeze:
-                        _params = [repr(t.params[p]) for p in ptr._squeeze]
-                        _params = ', '.join(_params)
-                        line += ', squeeze={}'.format(_params)
                 sweeped_lines[level] = head, line
             elif loglevel is not None:
                 line = '{} = {}'
                 line = line.format(arg._uname, _value_str(value))
-                if isinstance(ptr, ParamPointer):
+                if isinstance(ptr, DependParamPointer):
                     line += ':  from {!r}'.format(ptr._param)
                     t = ptr._param._task
                     if ptr._squeeze:
@@ -2789,7 +2605,7 @@ class Task(BaseSweepIterator):
     def get_depend_args(self):
         params = {}
         for name, arg in self.args:
-            if isinstance(arg._ptr, (ParamPointer, DependParamPointer)):
+            if isinstance(arg._ptr, DependParamPointer):
                 args = params.setdefault(arg._ptr._param, [])
                 args.append(arg)
         levels = self.args._nested_levels
@@ -2800,7 +2616,7 @@ class Task(BaseSweepIterator):
                 args = levels[idx]
                 if len(args) > 1:
                     dep_args[name] = [a for a in args if a is not arg]
-            elif isinstance(arg._ptr, (ParamPointer, DependParamPointer)):
+            elif isinstance(arg._ptr, DependParamPointer):
                 args = params[arg._ptr._param]
                 if len(args) > 1:
                     dep_args[name] = [a for a in args if a is not arg]
