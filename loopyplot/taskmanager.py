@@ -1266,7 +1266,7 @@ class TaskSweep(BaseSweepIterator):
         if self.clen != self.task.clen:
             self.last_clen = self.clen
             self.clen = self.task.clen
-            self._key_paths = self.get_key_paths()
+            self._key_paths = self.get_arg_paths()
             self._cidxs = self.create_states(self.last_clen, self.clen)
             self.idx = 0
 
@@ -1285,7 +1285,7 @@ class TaskSweep(BaseSweepIterator):
 
     def get_key(self, cidx):
         if not self._key_paths:
-            self._key_paths = self.get_key_paths()
+            self._key_paths = self.get_arg_paths()
         states = []
         for path in self._key_paths:
             _cidx = self._get_cidx_from_depending_task(path, cidx)
@@ -1317,26 +1317,8 @@ class TaskSweep(BaseSweepIterator):
             self.create_states(last_clen, clen)
         return sorted(self._states[last_clen, clen][cidx - last_clen])
 
-    def get_key_paths(self, squeezed_paths=[]):
-        sq_paths = self.squeeze + squeezed_paths
-        paths = []
-        _tasksweeps = set()
-        for name, arg in self.task.args:
-            arg_path = [arg]
-            if arg in self.task.args._tasksweep_args.keys():
-                # arg is depending argument
-                tasksweep = self.task.args._tasksweep_args[arg]
-                if arg_path in sq_paths or tasksweep in _tasksweeps:
-                    continue
-                _tasksweeps.add(tasksweep)
-                for path in tasksweep.get_key_paths(sq_paths):
-                    full_path = [arg] + path
-                    if full_path not in sq_paths:
-                        paths.append(full_path)
-            elif arg_path not in sq_paths:
-                # arg is local argument
-                paths.append(arg_path)
-        return paths
+    def get_arg_paths(self, sq_paths=[]):
+        return self.task.args._get_arg_paths(self.squeeze + sq_paths)
 
 
 class DependParamPointer:
@@ -1569,6 +1551,26 @@ class ArgumentParams(Parameters):
         for arg, level in self._nested_args.items():
             levels.setdefault(level, []).append(arg)
         return levels
+
+    def _get_arg_paths(self, sq_paths=[]):
+        paths = []
+        _tasksweeps = set()
+        for name, arg in self:
+            arg_path = [arg]
+            if arg in self._tasksweep_args.keys():
+                # arg is depending argument
+                tasksweep = self._tasksweep_args[arg]
+                if arg_path in sq_paths or tasksweep in _tasksweeps:
+                    continue
+                _tasksweeps.add(tasksweep)
+                for path in tasksweep.get_arg_paths(sq_paths):
+                    full_path = [arg] + path
+                    if full_path not in sq_paths:
+                        paths.append(full_path)
+            elif arg_path not in sq_paths:
+                # arg is local argument
+                paths.append(arg_path)
+        return paths
 
     def _get_non_squeezed_args(self, sq_args):
         dep_tasks = set()

@@ -56,21 +56,21 @@ def task_setup():
     return one, two, three
 
 
-def test_get_key_paths_1(task_setup):
+def test_get_arg_paths_1(task_setup):
     one, two, three = task_setup
 
     tasksweep = two.args._tasksweeps[one]
     assert tasksweep.squeeze == [[one.args.x]]
-    key_paths = tasksweep.get_key_paths()
+    key_paths = tasksweep.get_arg_paths()
     assert key_paths == [[one.args.gain], [one.args.offs]]
 
     tasksweep = three.args._tasksweeps[one]
     assert tasksweep.squeeze == [[one.args.offs]]
-    key_paths = tasksweep.get_key_paths()
+    key_paths = tasksweep.get_arg_paths()
     assert key_paths == [[one.args.x], [one.args.gain]]
 
 
-def test_get_key_paths_2(task_setup):
+def test_get_arg_paths_2(task_setup):
     one, two, three = task_setup
 
     three.add_dependency(two, squeeze=[[two.args.x]])
@@ -78,11 +78,11 @@ def test_get_key_paths_2(task_setup):
 
     tasksweep = three.args._tasksweeps[two]
     assert tasksweep.squeeze == [[two.args.x]]
-    key_paths = tasksweep.get_key_paths()
+    key_paths = tasksweep.get_arg_paths()
     assert key_paths == [[two.args.offs]]
 
 
-def test_get_key_paths_3(task_setup):
+def test_get_arg_paths_3(task_setup):
     one, two, three = task_setup
 
     three.add_dependency(two, squeeze=[[two.args.x, one.args.x]])
@@ -90,14 +90,14 @@ def test_get_key_paths_3(task_setup):
 
     tasksweep = three.args._tasksweeps[two]
     assert tasksweep.squeeze == [[two.args.x, one.args.x]]
-    key_paths = tasksweep.get_key_paths()
+    key_paths = tasksweep.get_arg_paths()
     assert key_paths == [
         [two.args.x, one.args.gain],
         [two.args.x, one.args.offs],
         [two.args.offs]]
 
 
-def test_get_key_paths_4(task_setup):
+def test_get_arg_paths_4(task_setup):
     one, two, three = task_setup
 
     three.add_dependency(two, squeeze=[
@@ -108,5 +108,5 @@ def test_get_key_paths_4(task_setup):
 
     tasksweep = three.args._tasksweeps[two]
     assert tasksweep.squeeze == [[two.args.x, one.args.offs], [two.args.offs]]
-    key_paths = tasksweep.get_key_paths()
+    key_paths = tasksweep.get_arg_paths()
     assert key_paths == [[two.args.x, one.args.gain]]
