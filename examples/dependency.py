@@ -36,5 +36,7 @@ noise.run()
 
 #~ poly.plot('x', 'y')
 noise.plot(poly.args.x, 'y')
-noise.plot(poly.args.x, 'x', accumulate=[[zeros.args.mid, poly]])
+
+# accumulate should be path, otherwise no read_csv
+#~ noise.plot(poly.args.x, 'x', accumulate=[[zeros.args.mid, poly]])
 
