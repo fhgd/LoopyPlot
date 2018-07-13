@@ -1311,6 +1311,12 @@ class TaskSweep(BaseSweepIterator):
     def get_arg_paths(self, sq_paths=[]):
         return self.task.args._get_arg_paths(self.squeeze + sq_paths)
 
+    def _to_dict(self):
+        dct = OrderedDict()
+        dct['__tasksweep__'] = self.task.name
+        dct['squeeze'] = self.squeeze
+        return dct
+
 
 class DependParamPointer:
     def __init__(self, param, tasksweep):
@@ -2384,8 +2390,14 @@ class Task(BaseSweepIterator):
         plotmanager.log.level = plevel
 
     def add_dependency(self, task, squeeze=''):
+        # since TaskSweep has a more meaningful json repr
+        # we use a helper function
+        self._add_dependency(TaskSweep(task, squeeze))
+
+    @config
+    def _add_dependency(self, tasksweep):
+        task = tasksweep.task
         if task not in self.args._tasksweeps:
-            tasksweep = TaskSweep(task, squeeze)
             self.args._tasksweeps[task] = tasksweep
         self.args._last_tasksweep = self.args._tasksweeps[task]
         self.args._last_tasksweep_args = []
@@ -2717,11 +2729,12 @@ class Task(BaseSweepIterator):
         # quad.plot('x', 'y', sweep='m', col=1)
         #~ self.em.add_idx_event(sweep, idx=0, action=pm.newline)
 
-    def to_csv(self, filename=''):
+    def to_csv(self, filename='', save_dependencies=True):
         if not filename:
             filename = self.name + '.csv'
-        file = open(filename, 'w')
+        log.info('save {} to {}'.format(self, filename))
 
+        file = open(filename, 'w')
         for line in TabWriter(self).lines():
             file.write('## {}\n'.format(line))
 
@@ -2742,6 +2755,17 @@ class Task(BaseSweepIterator):
             file.write('; '.join(line))
             file.write('\n')
         file.close()
+
+        if save_dependencies:
+            for task in self.get_depend_tasks():
+                task.to_csv(save_dependencies=False)
+
+    def get_depend_tasks(self):
+        tasks = set()
+        for task in self.args._tasksweeps:
+            tasks.add(task)
+            tasks.update(task.get_depend_tasks())
+        return tasks
 
     @staticmethod
     def _encode(value):
@@ -2832,6 +2856,7 @@ class Task(BaseSweepIterator):
         return dct, task
 
     def _apply_config(self, dct, namespace={}):
+        plot_cmds = []
         for conf in dct['config']:
             names = conf['cmd'].split('.')
             if len(names) == 1:
@@ -2842,20 +2867,14 @@ class Task(BaseSweepIterator):
                 params = getattr(self, param_namespace)
                 param = getattr(params, param_name)
                 func = getattr(param, func_name)
-            _args = []
-            for arg in conf.get('args', []):
-                try:
-                    ptype = arg['__param__']
-                    taskname = arg['task']
-                    task = namespace[taskname]
-                    if ptype == 'Argument':
-                        _args.append(task.args[arg['name']])
-                    else:
-                        _args.append(task.returns[arg['name']])
-                except (TypeError, KeyError):
-                    _args.append(arg)
-            _kwargs = conf.get('kwargs', {})
-            func(*_args, **_kwargs)
+            args = conf.get('args', [])
+            args = self._dct_to_dct(args, namespace)
+            kwargs = conf.get('kwargs', {})
+            kwargs = self._dct_to_dct(conf.get('kwargs', {}), namespace)
+            if func.__name__ == 'plot':
+                plot_cmds.append( (func, args, kwargs) )
+            else:
+                func(*args, **kwargs)
         # state recover
         self.args._configure()
         self.args._nested._is_initialized = False
@@ -2863,11 +2882,42 @@ class Task(BaseSweepIterator):
             if arg._cache:
                 state = arg._cache[-1]
                 arg.state = state
+        # apply plot commands
+        for func, args, kwargs in plot_cmds:
+            func(*args, **kwargs)
+
+
+    def _dct_to_dct(self, dct, namespace):
+        s = json.dumps(dct)
+        def decode(dct):
+            if '__param__' in dct:
+                task = self._get_task(dct['task'], namespace)
+                if dct['__param__'] == 'Argument':
+                    return task.args[dct['name']]
+                else:
+                    return task.returns[dct['name']]
+            elif '__tasksweep__' in dct:
+                task = self._get_task(dct['__tasksweep__'], namespace)
+                return TaskSweep(task, dct.get('squeeze', []))
+            return dct
+        return json.loads(s, object_hook=decode)
+
+    @staticmethod
+    def _get_task(taskname, namespace):
+        if taskname in namespace:
+            task = namespace[taskname]
+        else:
+            filename = taskname + '.csv'
+            dct, task = Task._read_csv(filename)
+            namespace[taskname] = task
+            task._apply_config(dct, namespace)
+        return task
 
     @classmethod
     def read_csv(cls, filename):
         dct, task = cls._read_csv(filename)
-        task._apply_config(dct)
+        namespace = {task.name: task}
+        task._apply_config(dct, namespace)
         return task
 
     @classmethod
