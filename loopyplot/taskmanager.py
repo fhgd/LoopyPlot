@@ -1246,6 +1246,7 @@ class TaskSweep(BaseSweepIterator):
         self._cidxs = []    # loop over cidxs of task
         self._states = {}   # (last_clen, clen): [{cidxs_of_this_key}, ..]
                             #                     cidx_of_key
+        self._keys = {}     # cidx: key
 
     def __repr__(self):
         args = []
@@ -1280,13 +1281,14 @@ class TaskSweep(BaseSweepIterator):
     def create_states(self, last_clen, clen):
         states = []
         cidxs = []
-        keys = {}
+        keys = {}   # key: [cidx, ...]
         for cidx in range(last_clen, clen):
             key = self.get_key(cidx)
             if key not in keys.keys():
                 cidxs.append(cidx)
             keys.setdefault(key, set()).add(cidx)
             states.append(keys[key])
+            self._keys[cidx] = key
         self._states[self.last_clen, self.clen] = states
         return cidxs
 
