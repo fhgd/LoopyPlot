@@ -1295,7 +1295,7 @@ class TaskSweep(BaseSweepIterator):
             self._key_paths = self.get_arg_paths()
         states = []
         for path in self._key_paths:
-            _cidx = self.task._get_cidx_from_depending_task(path, cidx)
+            _cidx = self.task._get_cidx_from_path(path, cidx)
             state = path[-1].get_arg_state(_cidx)
             states.append(state)
         return tuple(states)
@@ -1751,7 +1751,7 @@ class ArgumentParams(Parameters):
                 continue
             values = []
             for idx in range(self._task.clen):
-                _cidx = self._task._get_cidx_from_depending_task(path, idx)
+                _cidx = self._task._get_cidx_from_path(path, idx)
                 values.append(path[-1].get_cache(_cidx))
             params[self._task._path_to_label(path)] = values
 
@@ -1963,7 +1963,7 @@ class ReturnParams(Parameters):
                 continue
             values = []
             for idx in range(self._task.clen):
-                _cidx = self._task._get_cidx_from_depending_task(path, idx)
+                _cidx = self._task._get_cidx_from_path(path, idx)
                 values.append(path[-1].get_cache(_cidx))
             params[self._task._path_to_label(path)] = values
 
@@ -2551,7 +2551,7 @@ class Task(BaseSweepIterator):
                 params.insert(0, arg)
         return params
 
-    def _get_cidx_from_depending_task(self, arg_path, cidx):
+    def _get_cidx_from_path(self, arg_path, cidx, fold=True):
         task = arg_path[0]._task
         for arg in arg_path[:-1]:
             # just to be sure
@@ -2560,11 +2560,12 @@ class Task(BaseSweepIterator):
                 raise ValueError(msg)
             task = arg._ptr.task
             cidx = arg.get_depend_cidx(cidx)
-            # if len(cidx) > 1 then arg has a squeezed dependency
-            # and since the squeezed arg is not in _key_paths
-            # we can just pick the first item from cidx because all
-            # other items in cidx pointing to the same state (value)
-            cidx = cidx[0]
+            if fold:
+                cidx = cidx[0]
+                # if len(cidx) > 1 then arg has a squeezed dependency
+                # and since the squeezed arg is not in _key_paths
+                # we can just pick the first item from cidx because all
+                # other items in cidx pointing to the same state (value)
         return cidx
 
     def _get_argpath(self, value):
