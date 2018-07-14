@@ -2604,32 +2604,18 @@ class Task(BaseSweepIterator):
         return cidx
 
     # ToDo: should be in self.args
-    def get_value_from_path(self, path, cidx=None):
+    def get_value_from_path(self, path, cidx=None, fold=False):
         if cidx is None:
             cidx = range(self.clen)
         try:
-            return [self.get_value_from_path(path, idx) for idx in cidx]
+            values = []
+            for idx in cidx:
+                value = self.get_value_from_path(path, idx, fold)
+                values.append(value)
+            return values
         except TypeError:
-            task = self
-            for arg in path[:-1]:
-                if task == arg._task:
-                    task = arg._ptr.task
-                else:
-                    msg = 'task {} != {}'.format(task, arg._task)
-                    raise ValueError(msg)
-                cidx = arg.get_depend_cidx(cidx)
-                # guess:
-                #   if cidx is list, then arg has a squeezed dependency
-                # ToDo:
-                #   fold cidx if next arg is in squeezed arg._task.args
-                #   but is NOT the squeezed arg itself
-            if isinstance(cidx, list):
-                for sq_arg in arg._get_squeezed_args():
-                    if (path[-1] in sq_arg._task.args
-                        and path[-1] is not sq_arg
-                    ):
-                        cidx = cidx[0]
-            return path[-1].get_cache(cidx)
+            _cidx = self._get_cidx_from_path(path, cidx, fold)
+            return path[-1].get_cache(_cidx)
 
     # ToDo: should be in task.args
     def get_depend_args(self):
