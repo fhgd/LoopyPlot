@@ -2552,7 +2552,8 @@ class Task(BaseSweepIterator):
         return params
 
     def _get_cidx_from_path(self, arg_path, cidx, fold=True):
-        task = arg_path[0]._task
+        #~ task = arg_path[0]._task
+        task = self
         for arg in arg_path[:-1]:
             # just to be sure
             if task != arg._task:
