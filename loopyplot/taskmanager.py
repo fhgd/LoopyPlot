@@ -1259,6 +1259,13 @@ class TaskSweep(BaseSweepIterator):
         cidx = self._cidxs[idx]
         return self.last_clen, self.clen, cidx
 
+    def set_value(self, value):
+        last_clen, clen, cidx = value
+        self.last_clen = last_clen
+        self.clen = clen
+        self._cidxs = self.create_states(last_clen, clen)
+        self.idx = self._cidxs.index(cidx)
+
     def __len__(self):
         return len(self._cidxs)
 
@@ -1315,6 +1322,10 @@ class DependParamPointer:
     @property
     def state(self):
         return self._tasksweep.value
+
+    @state.setter
+    def state(self, value):
+        self._tasksweep.set_value(value)
 
     def get_value(self, state):
         try:
