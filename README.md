@@ -129,14 +129,14 @@ experimental measurements speed is not an issue for development
 right now.
 
 Open issues before first beta release 0.1:
-* docstings
-* improve logging
-* write unit tests
-* write more use case demos
-* refactoring the dependency management
-* plotting: add new data points in arbitrary order (not only append),
-  needed for binary sweeps
-* csv: save arrays in an extra csv file (instead of string encoding)
+- [x] improve logging
+- [x] refactoring the dependency management (in progress)
+- [ ] plotting: add new data points in arbitrary order (not only append),
+- [ ] needed for binary sweeps
+- [ ] docstings
+- [ ] write more tests
+- [ ] write more use case demos
+- [ ] csv: save arrays in an extra csv file (instead of string encoding)
 
 Further ideas (beyond 0.1):
 * implement horizontal nested task lists over vertical looped lists
