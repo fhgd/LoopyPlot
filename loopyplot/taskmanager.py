@@ -739,36 +739,6 @@ class ReturnValue:
         return self.as_table(idxs)
 
 
-class ConstantParam:
-    __slots__ = ['_value']
-    def __init__(self, value):
-        self._value = value
-
-    @property
-    def value(self):
-        return self._value
-
-    @property
-    def idx(self):
-        return 0
-
-    @property
-    def state(self):
-        return (None, 0)
-
-    def get_value(self, state):
-        return self._value
-
-    def __len__(self):
-        return 1
-
-    def __repr__(self):
-        args = ['{!r}'.format(self._value)]
-        return "{classname}({args})".format(
-            classname=self.__class__.__name__,
-            args=', '.join(args))
-
-
 class ConstantPointer:
     __slots__ = ['_value']
 
