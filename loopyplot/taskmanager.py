@@ -2437,41 +2437,6 @@ class Task(BaseSweepIterator):
             path.insert(0, via_arg)
         return path
 
-    def get_path(self, param, via_args=[]):
-        via = set(via_args)
-        tasks = self.depend_tasks
-        params = [param]
-        while 1:
-            task = params[0]._task
-            if task is self:
-                break
-            else:
-                args = tasks[task]
-                if len(args) > 1:
-                    try:
-                        arg = via.intersection(args).pop()
-                    except KeyError:
-                        # workaround:
-                        # try to avoid via_args if multiple arguments
-                        # depends in the same way on an other task
-                        # => check if these args have the same nested
-                        # levels
-                        levels = {}
-                        for _arg in args:
-                            _task = _arg._task
-                            level = _task.args._nested_args[_arg]
-                            levels.setdefault(_task, set()).add(level)
-                        if len(levels) == 1 and len(levels[_task]) == 1:
-                            arg = args[0]
-                        else:
-                            msg = 'no hint in via_args for depending ' \
-                                  'arguments {} of task {}'
-                            raise ValueError(msg.format(args, task))
-                else:
-                    arg = args[0]
-                params.insert(0, arg)
-        return params
-
     def _get_cidx_from_path(self, arg_path, cidx, fold=True):
         #~ task = arg_path[0]._task
         task = self
