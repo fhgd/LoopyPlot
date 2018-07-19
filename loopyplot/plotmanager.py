@@ -184,7 +184,7 @@ class PlotManager:
                     params = self.xyparams.pop(oldkey)
                     self.xyparams.setdefault(newkey, []).extend(params)
 
-    def plot(self, task, x='', y='', squeeze='', accumulate='*',
+    def plot(self, task, x=[], y=[], squeeze='', accumulate='*',
              row=0, col=0, use_cursor=True, **kwargs):
         if task not in self.views:
             self.views[task] = self.new_view()
@@ -198,20 +198,24 @@ class PlotManager:
         if isinstance(col, list):
             col = tuple(col)
 
-        #~ xpath = task._get_argpath(x)
-        if not x:
-            xpath = []
-        elif isinstance(x, str):
-            xpath = [task.params[x]]
-        else:
-            xpath = x
+        xpath = task.complete_path(x)
+        if xpath != x:
+            msg = ['xpath is completed: {}',
+                   '              from: {!r}']
+            msg = '\n'.join(msg).format(xpath, x)
+            log.debug(msg)
         if xpath:
             xlabel = self._path_to_short_label(xpath, task)
             xunit = xpath[-1]._unit
             self.xlabel(task, xlabel, xunit, row, col)
         else:
             self.xlabel(task, 'index', '', row, col)
-        ypath = task._get_argpath(y)
+        ypath = task.complete_path(y)
+        if ypath != y:
+            msg = ['ypath is completed: {}',
+                   '              from: {!r}']
+            msg = '\n'.join(msg).format(ypath, y)
+            log.debug(msg)
         yunit = ypath[-1]._unit
         if len(ypath) == 1:
             ylabel = self._path_to_short_label(ypath, task)
@@ -221,12 +225,16 @@ class PlotManager:
             self.ylabel(task, ylabel, yunit, row, col,
                         rotation='vertical',
                         horizontalalignment='center')
+        _squeeze = squeeze
         if squeeze is None and xpath in task.args._get_arg_paths():
-            squeeze = [xpath]
-        if squeeze:
-            # test if squeeze is NOT a list of list
-            if all(not isinstance(el, (list, tuple)) for el in squeeze):
-                squeeze = [squeeze]
+            squeeze = xpath
+        else:
+            squeeze = task.complete_path(squeeze)
+        if squeeze != _squeeze:
+            msg = ['squeeze is completed: {}',
+                   '                from: {!r}']
+            msg = '\n'.join(msg).format(squeeze, _squeeze)
+            log.debug(msg)
 
         args = dict(
             xpath=xpath,
@@ -771,6 +779,8 @@ class LineManager:
         self.xpath = xpath
         self.ypath = ypath
 
+        if squeeze:
+            squeeze = [squeeze]
         self._tasksweep = taskmanager.TaskSweep(task, squeeze)
         self._datas = {}
 
