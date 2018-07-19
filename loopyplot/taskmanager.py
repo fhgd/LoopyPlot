@@ -2317,23 +2317,26 @@ class Task(BaseSweepIterator):
         ... def two(x, offs=0):
         ...     y = x**2 + offs
         ...     return y
-        >>> two.args.x.depends_on(one.returns.y, squeeze='x')
+        >>> two.add_dependency(one, squeeze=[[one.args.x]])
+        >>> two.args.x.depends_on(one.returns.y)
         >>> two.args.offs.iterate(0, 10)
 
         >>> @Task
-        ... def three(x1, x2, x3):
+        ... def three(x1, x2, x3=3):
         ...     y = x1 * sum(x2) + x3
         ...     return y
 
-        #~ >>> three.args.x1.depends_on(two.returns.y, squeeze='offs')
-        >>> three.args.x1.depends_on(two.args.offs, squeeze='offs')
+        >>> three.add_dependency(two, squeeze=[[two.args.offs]])
+        >>> three.args.x1.depends_on(two.args.offs)
+        >>> three.add_dependency(one, squeeze=[[one.args.x]])
         >>> three.args.x2.depends_on(one.returns.y, squeeze='x')
-        >>> three.args.x3.depends_on(one.returns.y)
+        >>> # three.args.x3.depends_on(one.returns.y)
 
         >>> @Task
         ... def four(x1, x2=0):
         ...     y = x1 + x2
         ...     return y
+        >>> four.add_dependency(three)
         >>> four.args.x1.depends_on(three.returns.y)
         >>> four.args.x2.sweep(1, 3)
 
@@ -2343,59 +2346,6 @@ class Task(BaseSweepIterator):
                      (<one>, [<three.args.x2>,
                               <three.args.x3>,
                               <two.args.x>])])
-
-        >>> four.get_path(two.args.x)
-        [<four.args.x1>, <three.args.x1>, <two.args.x>]
-
-        >>> four.get_path(one.args.x, [three.args.x2])
-        [<four.args.x1>, <three.args.x2>, <one.args.x>]
-
-        >>> four.get_path(one.args.x, via_args=[two.args.x])
-        [<four.args.x1>, <three.args.x1>, <two.args.x>, <one.args.x>]
-
-        >>> one.run()
-        >>> one.returns.as_table()
-           x  y
-        0  0  1
-        1  1  2
-        2  2  3
-
-        >>> two.run()
-        >>> two.returns.as_table()
-                   x  offs             y
-        0  [1, 2, 3]     0     [1, 4, 9]
-        1  [1, 2, 3]    10  [11, 14, 19]
-
-        >>> three.run()
-        >>> three.returns.as_table()
-                x1         x2  x3        y
-        0  [0, 10]  [1, 2, 3]   3  [3, 63]
-
-        >>> four.run()
-        >>> four.returns.as_table()
-                x1  x2        y
-        0  [3, 63]   1  [4, 64]
-        1  [3, 63]   2  [5, 65]
-        2  [3, 63]   3  [6, 66]
-
-        >>> four.get_value_from_path([three.args.x1], cidx=2)
-        array([ 0, 10])
-
-        >>> four.get_value_from_path([three.args.x2], cidx=2)
-        array([1, 2, 3])
-
-        >>> four.get_value_from_path([two.args.offs], cidx=2)
-        [0, 10]
-
-        >>> four.get_value_from_path([two.returns.y], cidx=2)
-        [array([1, 4, 9]), array([11, 14, 19])]
-
-        >>> four.get_value_from_path([two.args.x], cidx=2)
-        [array([1, 2, 3]), array([1, 2, 3])]
-
-        >>> path = [(one.args.x, two.args.x)]
-        >>> four.get_value_from_path(path, cidx=[1, 2])
-        [[[0, 1, 2], [0, 1, 2]], [[0, 1, 2], [0, 1, 2]]]
         """
         tasks = OrderedDict()
         for name, arg in self.args:
