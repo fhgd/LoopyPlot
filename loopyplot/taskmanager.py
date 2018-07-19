@@ -1565,7 +1565,9 @@ class ArgumentParams(Parameters):
                 # arg is depending argument
                 #~ print('{} is depending argument'.format(arg))
                 tasksweep = self._tasksweep_args[arg]
-                if arg_path in sq_paths or tasksweep in _tasksweeps:
+                if (arg_path in sq_paths
+                    or (tasksweep in _tasksweeps and not all)
+                ):
                     continue
                 _tasksweeps.add(tasksweep)
                 for path in tasksweep.get_arg_paths(sq_paths, all):
@@ -2530,6 +2532,76 @@ class Task(BaseSweepIterator):
                 label.append(arg._task.name)
         label.append(arg._uname)
         return '|'.join(label)
+
+    def _paths_to_task(self, task, _paths=None, _args=None):
+        if _args is None:
+            _args = self.depend_tasks
+        if _paths is None:
+            _paths = {}
+        try:
+            arg_paths = _paths[task]
+            log.debug('_paths_to_task: use cached result for', task)
+            return arg_paths
+        except KeyError:
+            arg_paths = []
+            for arg in _args[task]:
+                _task = arg._task
+                if _task is self:
+                    arg_paths.append([arg])
+                else:
+                    for path in self._paths_to_task(_task, _paths, _args):
+                        arg_paths.append(path + [arg])
+            arg_paths = sorted(arg_paths, key=len)
+            _paths[task] = arg_paths
+            log.debug('_paths_to_task: calculate for', task)
+            return arg_paths
+
+    def complete_path(self, via_path):
+        # catch simple cases
+        if not via_path:
+            return []
+        elif not isinstance(via_path, (list, tuple)):
+            via_path = [via_path]
+        if isinstance(via_path[0], str):
+            # convert str via into parameter of task self
+            name = via_path[0].strip()
+            try:
+                via_path[0] = self.params[name]
+            except KeyError:
+                msg = "drop {!r}: it's not in {}.params"
+                msg = msg.format(name, self.name)
+                log.warning(msg)
+                via_path.pop(0)
+                if not via_path:
+                    return []
+        path = [via_path[-1]]
+        vias = via_path[:-1]
+        _args = self.depend_tasks
+        _cache = {}
+        while 1:
+            task = path[0]._task
+            if task is self:
+                break
+            via_arg = None
+            if vias:
+                via = vias[-1]
+                if via in _args[task]:
+                    # via is an argument
+                    via_arg = via
+                    vias.pop(-1)
+                elif hasattr(via, 'args'):
+                    # via is a task
+                    for arg in _args[task]:
+                        if arg._task is via:
+                            via_arg = arg
+                            vias.pop(-1)
+                            break
+            if via_arg is None:
+                # complete the path with the last arg of the
+                # shortest avialable path between self and current task
+                via_arg = self._paths_to_task(task, _cache, _args)[0][-1]
+            path.insert(0, via_arg)
+        return path
 
     def get_path(self, param, via_args=[]):
         via = set(via_args)
