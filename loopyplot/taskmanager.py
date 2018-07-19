@@ -2727,7 +2727,7 @@ class Task(BaseSweepIterator):
             self.pm.update(self)
 
     @config
-    def plot(self, x='', y='', squeeze=None, accumulate='*',
+    def plot(self, x=[], y=[], squeeze=None, accumulate='*',
              row=0, col=0, use_cursor=True, **kwargs):
         self.pm.plot(self, x, y, squeeze, accumulate, row, col,
                      use_cursor, **kwargs)
