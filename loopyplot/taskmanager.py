@@ -974,17 +974,6 @@ class Argument:
                 tasks.append(ptr.task)
         return tasks
 
-    def _get_squeezed_args(self):
-        args = []
-        for ptr in self._ptrs._pointers:
-            if hasattr(ptr, '_param'):
-                task = ptr._param._task
-                for name in ptr._squeeze:
-                    arg = task.args[name]
-                    if arg not in args:
-                        args.append(arg)
-        return args
-
     @config
     def use_default(self):
         self._ptr = self._default
