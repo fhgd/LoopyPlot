@@ -1570,7 +1570,7 @@ class ArgumentParams(Parameters):
             df.index.name = None
         return df
 
-    def select_by_sweep(self, sweeps=[], squeeze=[], cidx=None,
+    def _select_by_sweep(self, sweeps=[], squeeze=[], cidx=None,
                         deps=None, **kwargs):
         """Returns selected cache indices by sweeped argument names.
 
@@ -1587,7 +1587,7 @@ class ArgumentParams(Parameters):
         >>> task.run(2)
         >>> task.run(1)
         >>> task.run(0)
-        >>> idxs, args = task.args.select_by_sweep(sweeps='b', squeeze='a')
+        >>> idxs, args = task.args._select_by_sweep(sweeps='b', squeeze='a')
         >>> idxs
         [[9, 10, 11], [12]]
         >>> args
@@ -1595,13 +1595,13 @@ class ArgumentParams(Parameters):
         >>> task.run()
         >>> len(task.args._nested)
         54
-        >>> idxs, _ = task.args.select_by_sweep()
+        >>> idxs, _ = task.args._select_by_sweep()
         >>> idxs
         [53]
-        >>> idxs, _ = task.args.select_by_sweep(cidx=32)
+        >>> idxs, _ = task.args._select_by_sweep(cidx=32)
         >>> idxs
         [32]
-        >>> idxs, _ = task.args.select_by_sweep(squeeze=['d', 'c'])
+        >>> idxs, _ = task.args._select_by_sweep(squeeze=['d', 'c'])
         >>> idxs
         [[8, 35, 17, 44, 26, 53]]
         >>> task.args.as_table(idxs[0])
@@ -1612,7 +1612,7 @@ class ArgumentParams(Parameters):
         44  2  12  101  600  5
         26  2  12  102  500  5
         53  2  12  102  600  5
-        >>> idxs, args = task.args.select_by_sweep(['b', 'a'], ['d', 'c'])
+        >>> idxs, args = task.args._select_by_sweep(['b', 'a'], ['d', 'c'])
         >>> idxs
         [[0, 27, 9, 36, 18, 45],
          [3, 30, 12, 39, 21, 48],
@@ -1633,7 +1633,7 @@ class ArgumentParams(Parameters):
           ((0, 0), (0, 2)),
           ((0, 1), (0, 2)),
           ((0, 2), (0, 2))]
-        >>> idxs, _ = task.args.select_by_sweep(['b', 'a'])
+        >>> idxs, _ = task.args._select_by_sweep(['b', 'a'])
         >>> idxs
         [45, 48, 51, 46, 49, 52, 47, 50, 53]
         >>> task.args.as_table(idxs)
@@ -1647,10 +1647,10 @@ class ArgumentParams(Parameters):
         47  2  10  102  600  5
         50  2  11  102  600  5
         53  2  12  102  600  5
-        >>> idxs, _ = task.args.select_by_sweep(['b', 'a'], cidx=50)
+        >>> idxs, _ = task.args._select_by_sweep(['b', 'a'], cidx=50)
         >>> idxs
         [45, 48, 46, 49, 47, 50]
-        >>> idxs,_=task.args.select_by_sweep(['b', 'a'], c=(0, 0), cidx=32)
+        >>> idxs,_=task.args._select_by_sweep(['b', 'a'], c=(0, 0), cidx=32)
         >>> idxs
         [27, 30, 28, 31, 29, 32]
         >>> task.args.as_table(idxs)
@@ -1700,7 +1700,7 @@ class ArgumentParams(Parameters):
             if squeeze:
                 args_idx = {n: idx for n, idx in zip(sweeps, aid[::-1])}
                 args_idx.update(kwargs)
-                iset, _ = self.select_by_sweep(squeeze, cidx=cidx,
+                iset, _ = self._select_by_sweep(squeeze, cidx=cidx,
                                                deps=deps, **args_idx)
                 if iset:
                     idxs.append(iset)
