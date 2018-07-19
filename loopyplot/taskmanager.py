@@ -697,18 +697,12 @@ class ReturnValue:
 
         params[self.name] = self.get_cache(idxs)
 
-        for param in include:
-            if isinstance(param, (list, tuple)):
-                param, via = param[0], param[1:]
-            else:
-                via = []
-            path = self._task.get_path(param, via)
+        if not isinstance(include, (list, tuple)):
+            include = [include]
+        for via_path in include:
+            path = self._task.complete_path(via_path)
+            name = self._task._path_to_label(path)
             values = self._task.get_value_from_path(path, idxs)
-            name = '{}.{}.{}'.format(
-                param._task.name,
-                'args' if isinstance(param, Argument) else 'results',
-                param.name
-            )
             params[name] = values
         if idxs:
             params['idxs'] = list(idxs)
