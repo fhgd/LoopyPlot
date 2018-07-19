@@ -1529,18 +1529,6 @@ class ArgumentParams(Parameters):
         for arg in args[1:]:
             self._nested_args[arg] = idx
 
-    def _get_zipped_args(self, value):
-        try:
-            levels = self._nested_levels
-            all_args = set()
-            for arg in self._get(value):
-                if arg in self._nested_args:
-                    level = self._nested_args[arg]
-                    all_args.update(levels[level])
-            return all_args
-        except ValueError:
-            return value._task.args._get_zipped_args(value)
-
     @property
     def _nested_levels(self):
         """inverse of self._nested_args"""
@@ -1593,104 +1581,6 @@ class ArgumentParams(Parameters):
                     if full_path not in paths:
                         paths.append(full_path)
         return paths
-
-    def _get_non_squeezed_args(self, sq_args):
-        dep_tasks = set()
-        args = []
-        for name, arg in self:
-            if arg in sq_args:
-                continue
-            tasks = arg._tasks
-            if tasks:
-                dep_tasks.update(tasks)
-            else:
-                # local arg
-                args.append(arg)
-        for task in dep_tasks:
-            args.extend(task.args._get_non_squeezed_args(sq_args))
-        return args
-
-    def _get_depending_args(self, sq_paths=None, pre_tasks=None, all=0):
-        if sq_paths is None:
-            sq_paths = []
-        if pre_tasks is None:
-            pre_tasks = []
-        dep_tasks = set()
-        paths = []
-        #~ print('*** {} ***'.format(self._task))
-        #~ print('sq_paths:', sq_paths)
-        for name, arg in self:
-            arg_path = pre_tasks + [arg]
-            #~ print('arg_path:', arg_path)
-            if arg_path in sq_paths:
-                sq_paths.remove(arg_path)
-                continue
-            tasks = arg._tasks
-            if tasks:
-                dep_tasks.update(tasks)
-                if all:
-                    paths.append([arg])
-            else:
-                # local arg
-                paths.append([arg])
-        pre_tasks = list(pre_tasks)
-        pre_tasks.append(self._task)
-        for task in dep_tasks:
-            dep_paths = task.args._get_depending_args(
-                sq_paths,
-                pre_tasks,
-                all=all,
-            )
-            for path in dep_paths:
-                path.insert(0, self._task)
-            paths += dep_paths
-        return paths
-
-    def _get_acc_paths(self, squeeze=''):
-        squeeze = self._get(squeeze)
-        squeeze = self._zipped_paths(squeeze)
-        sq_paths = self._guess_paths(squeeze)
-        # transform tasks in path into proper args
-        sq_paths = self._task_paths_to_arg_paths(sq_paths)
-        return sq_paths
-
-    def _guess_paths(self, squeeze):
-        arg_paths = sorted(self._get_arg_paths(all=True), key=len)
-        sq_paths = []
-        for sq_path in squeeze:
-            #~ print('sq_path:', sq_path)
-            for arg_path in arg_paths:
-                #~ print('arg_path:', arg_path)
-                if all(item in arg_path for item in sq_path):
-                    sq_paths.append(arg_path)
-                    break
-        return list(sq_paths)
-
-    @staticmethod
-    def _zipped_paths(task_path):
-        task_path = list(task_path)
-        task_path_with_zipped_args = []
-        for sq_arg in task_path:
-            if isinstance(sq_arg, Argument):
-                task_path.remove(sq_arg)
-                task_path_with_zipped_args = []
-                for arg in sq_arg._task.args._get_zipped_args(sq_arg):
-                    task_path_with_zipped_args.append([arg] + task_path)
-                break
-        return task_path_with_zipped_args
-
-    @staticmethod
-    def _task_paths_to_arg_paths(task_paths):
-        arg_paths = []
-        for path in task_paths:
-            arg = path[-1]
-            arg_path = [arg]
-            for task in path[-2::-1]:
-                #~ print('   ', arg, task)
-                arg = task.depend_tasks[arg._task][0]
-                arg_path.insert(0, arg)
-            arg_paths.append(arg_path)
-        return arg_paths
 
     def _add_sweeped_arg(self, arg):
         idx = max([0] + list(self._nested_args.values()))
@@ -2648,41 +2538,6 @@ class Task(BaseSweepIterator):
                 # and since the squeezed arg is not in _key_paths
                 # we can just pick the first item from cidx because all
                 # other items in cidx pointing to the same state (value)
-        return cidx
-
-    def _get_argpath(self, value):
-        if value in ('', None):
-            return []
-        elif isinstance(value, str):
-            return [self.params[value]]
-        elif isinstance(value, (tuple, list)):
-            args = []
-            for item in value:
-                if isinstance(item, str):
-                    args.append(self.params[item])
-                else:
-                    args.append(item)
-            param, via = args[0], args[1:]
-            return self.get_path(param, via)
-        else:
-            return self.get_path(value)
-
-    def get_cidx_from_path(self, path, cidx=None):
-        if cidx is None:
-            cidx = range(self.clen)
-        try:
-            return [self.get_cidx_from_path(path, idx) for idx in cidx]
-        except TypeError:
-            task = self
-            for arg in path[:-1]:
-                if task == arg._task:
-                    task = arg._ptr.task
-                else:
-                    msg = 'task {} != {}'.format(task, arg._task)
-                    raise ValueError(msg)
-                cidx = arg.get_depend_cidx(cidx)
-                if isinstance(cidx, list):
-                    cidx = cidx[0]
         return cidx
 
     # ToDo: should be in self.args
