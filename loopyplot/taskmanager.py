@@ -2618,6 +2618,8 @@ class Task(BaseSweepIterator):
             return values
         except TypeError:
             _cidx = self._get_cidx_from_path(path, cidx, fold)
+            if not fold and len(_cidx) == 1:
+                _cidx = _cidx[0]
             return path[-1].get_cache(_cidx)
 
     # ToDo: should be in task.args
