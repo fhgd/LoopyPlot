@@ -769,52 +769,6 @@ class ConstantParam:
             args=', '.join(args))
 
 
-class DependParam:
-    def __init__(self, param, squeeze=[]):
-        self.param = param
-        self.squeeze = squeeze
-        super().__init__()
-        self.tstate = []
-
-
-    def __len__(self):
-        return len(self.tstate)
-        #~ return len(self._task.nested)
-
-    @property
-    def idx(self):
-        return len(self) - 1
-        #~ return self._task.nested.idx
-
-    @property
-    def state(self):
-        task = self.param._task
-        return (task.clen, 0)
-
-    @property
-    def value(self):
-        task = self.param._task
-        if task.clen not in self.tstate:
-            self.tstate.append(task.clen)
-        idxs, _ = task.args.select_by_sweep(squeeze=self.squeeze)
-        return self.param.get_cache(idxs[0])
-
-    def __getitem__(self, item):
-        #~ return self.value
-        idx = item
-        cidx = self.tstate[idx]
-        return self.get_value((cidx, 0))
-
-    def get_value(self, state):
-        task = self.param._task
-        cidx = state[0] - 1
-        if cidx < 0:
-            msg = 'task {} has no results, try .run()'.format(task)
-            raise ValueError(msg)
-        idxs,_ = task.args.select_by_sweep(squeeze=self.squeeze, cidx=cidx)
-        return self.param.get_cache(idxs[0])
-
-
 class ConstantPointer:
     __slots__ = ['_value']
 
