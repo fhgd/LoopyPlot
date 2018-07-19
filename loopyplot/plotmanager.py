@@ -5,6 +5,7 @@ from matplotlib.colors import colorConverter
 from colorsys import rgb_to_hls, hls_to_rgb
 
 from collections import OrderedDict, Iterable
+from itertools import product
 
 from . import utils
 from . import taskmanager
@@ -792,17 +793,18 @@ class LineManager:
             if not isinstance(accumulate, (list, tuple)):
                 accumulate = [accumulate]
             acc_paths = [task.complete_path(path) for path in accumulate]
-        """
+        self.acc_paths = []
         for path in acc_paths:
-            #~ print('    path:', path)
-            _task_paths = task.args._zipped_paths(path)
-            #~ print('    zipped path:', _task_paths)
-            _task_paths = task.args._get_acc_paths(_task_paths)
-            #~ print('    get_acc_path:', _task_paths)
-            acc_paths += _task_paths
-        """
-        self.acc_paths = acc_paths
-        self.mask = [path in acc_paths for path in self._key_paths]
+            zipped = []
+            for param in path:
+                task = param._task
+                try:
+                    level = task.args._nested_args[param]
+                    zipped.append(task.args._nested_levels[level])
+                except KeyError:
+                    zipped.append([param])
+            self.acc_paths += [list(params) for params in product(*zipped)]
+        self.mask = [path in self.acc_paths for path in self._key_paths]
 
         self.lines = {}     # key: line
         self.cidxs = {}     # line: [cidx, ...]
