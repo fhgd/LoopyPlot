@@ -784,29 +784,24 @@ class LineManager:
         self._tasksweep = taskmanager.TaskSweep(task, squeeze)
         self._datas = {}
 
-        # accumulate
+        # get mask from accumulate-paths
+        self.accumulate = accumulate
         if accumulate == '*':
             acc_paths = self._key_paths
         else:
-            acc_paths = accumulate
-        if 0:
-            try:
-                arg_paths = task.args._get_paths(accumulate)
-                self._arg_paths = arg_paths
-            except ValueError:
-                msg = '{!r} not in key_args: {}'
-                msg = msg.format(accumulate, self._key_args)
-                raise ValueError(msg)
-            acc_paths = []
-            for path in arg_paths:
-                #~ print('    path:', path)
-                _task_paths = task.args._zipped_paths(path)
-                #~ print('    zipped path:', _task_paths)
-                _task_paths = task.args._get_acc_paths(_task_paths)
-                #~ print('    get_acc_path:', _task_paths)
-                acc_paths += _task_paths
-            #~ self._acc_paths_pre = acc_paths
-        self._acc_paths = acc_paths
+            if not isinstance(accumulate, (list, tuple)):
+                accumulate = [accumulate]
+            acc_paths = [task.complete_path(path) for path in accumulate]
+        """
+        for path in acc_paths:
+            #~ print('    path:', path)
+            _task_paths = task.args._zipped_paths(path)
+            #~ print('    zipped path:', _task_paths)
+            _task_paths = task.args._get_acc_paths(_task_paths)
+            #~ print('    get_acc_path:', _task_paths)
+            acc_paths += _task_paths
+        """
+        self.acc_paths = acc_paths
         self.mask = [path in acc_paths for path in self._key_paths]
 
         self.lines = {}     # key: line
