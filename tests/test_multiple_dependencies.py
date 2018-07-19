@@ -57,14 +57,14 @@ def task_setup():
         y = sum(x**2 + offs)
         return y
     two.args.offs.iterate(0, 10)
-    two.add_dependency(one, squeeze=[[one.args.x]])
+    two.add_dependency(one, squeeze=one.args.x)
     two.args.x.depends_on(one.returns.y)
 
     @Task
     def three(x1, x2):
         y = sum(x1) * x2
         return y
-    three.add_dependency(one, squeeze=[[one.args.x]])
+    three.add_dependency(one, squeeze=one.args.x)
     three.args.x1.depends_on(one.returns.y)
 
     @Task
@@ -140,7 +140,7 @@ def test_2(task_setup):
              '1  [1, 2, 3]    10  44']
     assert repr(df).split('\n') == lines
 
-    three.add_dependency(two, squeeze=[[two.args.offs]])
+    three.add_dependency(two, squeeze=two.args.offs)
     three.args.x2.depends_on(two.returns.y)
 
     three.run()
@@ -174,7 +174,7 @@ def test_3(task_setup):
              '3  [10, 11, 12]    10  395']
     assert repr(df).split('\n') == lines
 
-    three.add_dependency(two, squeeze=[[two.args.x]])
+    three.add_dependency(two, squeeze=two.args.x)
     three.args.x2.depends_on(two.returns.y)
 
     three.run()
@@ -222,10 +222,11 @@ def test_4(task_setup):
              '7  [25, 35, 45]    10        10        25  3905']
     assert repr(df).split('\n') == lines
 
-    three.add_dependency(two, squeeze=[
-        [two.args.x, one.args.offs]
-    ])
+    three.add_dependency(two, squeeze=[[two, one.args.offs]])
     three.args.x2.depends_on(two.returns.y)
+
+    path = three.args._last_tasksweep.squeeze
+    assert path == [[two.args.x, one.args.offs]]
 
     three.run()
     df = three.args.as_table(hide_const=True, include_dep_args=False)
@@ -286,12 +287,12 @@ def test_5(task_setup):
              '7  [25, 35, 45]    10  3905']
     assert repr(df).split('\n') == lines
 
-    three.add_dependency(two, squeeze=[
-        [two.args.x, one.args.offs],
-        [two.args.offs],
-    ])
+    three.add_dependency(two, squeeze=[one.args.offs, two.args.offs])
     three.args.x2.depends_on(two.returns.y)
     #~ three.args.x2.depends_on(two.args.x)
+
+    path = three.args._last_tasksweep.squeeze
+    assert path == [[two.args.x, one.args.offs], [two.args.offs]]
 
     three.run()
     df = three.args.as_table(include_dep_args=False)
@@ -317,10 +318,7 @@ def test_6(task_setup):
 
     two.run()
 
-    three.add_dependency(two, squeeze=[
-        [two.args.x, one.args.offs],
-        [two.args.offs],
-    ])
+    three.add_dependency(two, squeeze=[one.args.offs, two.args.offs])
     three.args.x2.depends_on(two.returns.y)
 
     three.run()

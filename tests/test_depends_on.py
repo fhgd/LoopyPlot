@@ -68,7 +68,7 @@ def test_squeeze(task_setup):
     assert repr(df).split('\n') == lines
 
     two.args.a.iterate(2, 4)
-    two.add_dependency(quad, squeeze=[[quad.args.x]])
+    two.add_dependency(quad, squeeze=quad.args.x)
     two.args.b.depends_on(quad.returns.y)
 
     two.run()
@@ -97,8 +97,11 @@ def test_double_squeeze(task_setup):
     assert repr(df).split('\n') == lines
 
     two.args.a.iterate(2, 4)
-    two.add_dependency(quad, squeeze=[[quad.args.x], [quad.args.offs]])
+    two.add_dependency(quad, squeeze=[quad.args.x, quad.args.offs])
     two.args.b.depends_on(quad.returns.y)
+
+    sq_path = two.args._last_tasksweep.squeeze
+    assert sq_path == [[quad.args.x], [quad.args.offs]]
 
     two.run()
     df = two.returns.as_table()
