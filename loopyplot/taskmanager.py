@@ -2194,10 +2194,13 @@ class Task(BaseSweepIterator):
             self.plot_update()
         plotmanager.log.level = plevel
 
-    def add_dependency(self, task, squeeze=''):
+    def add_dependency(self, task, squeeze=[]):
         # since TaskSweep has a more meaningful json repr
         # we use a helper function
-        self._add_dependency(TaskSweep(task, squeeze))
+        if not isinstance(squeeze, (list, tuple)):
+            squeeze = [squeeze]
+        sq_paths = [task.complete_path(path) for path in squeeze]
+        self._add_dependency(TaskSweep(task, sq_paths))
 
     @config
     def _add_dependency(self, tasksweep):

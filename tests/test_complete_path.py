@@ -15,7 +15,7 @@ def test_from_depend_tasks():
     def two(x, offs=0):
         y = x**2 + offs
         return y
-    two.add_dependency(one, squeeze=[[one.args.x]])
+    two.add_dependency(one, squeeze=one.args.x)
     two.args.x.depends_on(one.returns.y)
     two.args.offs.iterate(0, 10)
 
@@ -24,9 +24,9 @@ def test_from_depend_tasks():
         y = x1 * sum(x2) + x3
         return y
 
-    three.add_dependency(two, squeeze=[[two.args.offs]])
+    three.add_dependency(two, squeeze=two.args.offs)
     three.args.x1.depends_on(two.args.offs)
-    three.add_dependency(one, squeeze=[[one.args.x]])
+    three.add_dependency(one, squeeze=one.args.x)
     three.args.x2.depends_on(one.returns.y)
     #~ three.args.x3.depends_on(one.returns.y)
 
