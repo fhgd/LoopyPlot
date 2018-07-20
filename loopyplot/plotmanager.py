@@ -186,7 +186,7 @@ class PlotManager:
                     self.xyparams.setdefault(newkey, []).extend(params)
 
     def plot(self, task, x=[], y=[], squeeze='', accumulate='*',
-             row=0, col=0, use_cursor=True, **kwargs):
+             row=0, col=0, use_cursor=True, xsort=False, **kwargs):
         if task not in self.views:
             self.views[task] = self.new_view()
         view = self.views[task]
@@ -248,6 +248,7 @@ class PlotManager:
             squeeze=[] if squeeze is None else squeeze,
             accumulate=accumulate,
             use_cursor=use_cursor,
+            xsort=xsort,
             kwargs=kwargs,
         )
         config = row, col, LineManager, args
@@ -773,7 +774,7 @@ class PlotManager:
 
 class LineManager:
     def __init__(self, loc, ax, task, pm, xpath, ypath,
-                 squeeze, accumulate, use_cursor,
+                 squeeze, accumulate, use_cursor, xsort,
                  kwargs):
         self.loc = loc
         self.ax = ax
@@ -784,6 +785,7 @@ class LineManager:
         self.pm = pm
         self.xpath = xpath
         self.ypath = ypath
+        self.xsort = xsort
 
         if squeeze:
             squeeze = [squeeze]
@@ -944,23 +946,23 @@ class LineManager:
                 if not self.squeeze:
                     continue
 
-            #~ _cidxs = cidxs if self.squeeze else cidxs[0]
             yvals = self.task.get_value_from_path(self.ypath, cidxs)
             ydata = line.get_ydata()
-            #~ print('ydata: {!r}'.format(ydata))
             ydata = np.append(ydata, yvals)
-            #~ print()
-            #~ print('cidxs:', cidxs)
-            #~ print('yvals:', yvals)
-            #~ print('ydata: {!r}'.format(ydata))
-            line.set_ydata(ydata)
 
             if self.xpath:
                 xvals = self.task.get_value_from_path(self.xpath, cidxs)
                 xdata = line.get_xdata()
                 xdata = np.append(xdata, xvals)
+                if self.xsort:
+                    xidxs = np.argsort(xdata)
+                    xdata = xdata[xidxs]
+                    ydata = ydata[xidxs]
+                    self.cidxs[line] = [self.cidxs[line][n] for n in xidxs]
             else:
                 xdata = np.arange(len(ydata))
+
+            line.set_ydata(ydata)
             line.set_xdata(xdata)
 
         if len(ydata):
