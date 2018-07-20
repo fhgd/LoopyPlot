@@ -129,7 +129,7 @@ right now.
 
 Open issues before first beta release 0.1:
 - [x] improve logging
-- [x] refactoring the dependency management (in progress)
+- [x] refactoring the dependency management
 - [ ] plotting: add new data points in arbitrary order (not only append),
 - [ ] needed for binary sweeps
 - [ ] docstings
