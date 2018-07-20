@@ -71,8 +71,8 @@ curves at the end.
 from numpy import pi, cos, sin
 
 def lissajous(t: 's', freq: 'Hz', phi=0):
-    xpos: 'cm' = sin(2*pi * t)
-    ypos: 'cm' = cos(2*pi*freq * t + phi)
+    xpos: 'cm' = cos(2*pi*freq * t + phi)
+    ypos: 'cm' = sin(2*pi * t)
     return xpos, ypos
 ```
 
@@ -92,7 +92,6 @@ lissajous = loopyplot.Task(lissajous)
 lissajous.args.freq.value = 2
 lissajous.args.t.sweep(0, 1, num=30)
 lissajous.args.phi.iterate(pi/4, pi/2, 3*pi/4)
-
 ```
 
 Afterwards we can run the nested double sweep and plot the results.
@@ -103,13 +102,13 @@ Afterwards we can run the nested double sweep and plot the results.
 lissajous.run()
 
 # (3) display the results
-lissajous.plot('t', 'xpos', row=0, col=1)
-lissajous.plot('t', 'ypos', row=1, col=1)
-lissajous.plot('xpos', 'ypos', squeeze='t', accumulate='t', row=None)
+lissajous.plot('t', 'xpos')
+lissajous.plot('t', 'ypos', row=1, accumulate=[])
+lissajous.plot('xpos', 'ypos', row=[0, 1], col=1, squeeze='t', accumulate=[])
 ```
 
 The matplotlib figure has an interactive data cursor.
-You can click at any point (e.g. in the lower right axes) in order to
+You can click at any point (e.g. in the upper left right axes) in order to
 update the data cursor and explore the relations between the plots.
 
 ![Lissajous](./examples/lissajous.gif)
