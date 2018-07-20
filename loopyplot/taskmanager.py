@@ -636,10 +636,8 @@ class ReturnValue:
         self._cache = []
 
     def _to_dict(self):
-        dct = OrderedDict()
-        dct['__param__'] = self.__class__.__name__
-        dct['name'] = self.name
-        dct['task'] = self._task.name
+        dct = {}
+        dct['__param__'] = repr(self).strip('<>')
         return dct
 
     def __repr__(self):
@@ -904,10 +902,8 @@ class Argument:
         self._task = task
 
     def _to_dict(self):
-        dct = OrderedDict()
-        dct['__param__'] = self.__class__.__name__
-        dct['name'] = self.name
-        dct['task'] = self._task.name
+        dct = {}
+        dct['__param__'] = repr(self).strip('<>')
         return dct
 
     def _reset(self):
@@ -2194,17 +2190,14 @@ class Task(BaseSweepIterator):
             self.plot_update()
         plotmanager.log.level = plevel
 
+    @config
     def add_dependency(self, task, squeeze=[]):
         # since TaskSweep has a more meaningful json repr
         # we use a helper function
         if not isinstance(squeeze, (list, tuple)):
             squeeze = [squeeze]
         sq_paths = [task.complete_path(path) for path in squeeze]
-        self._add_dependency(TaskSweep(task, sq_paths))
-
-    @config
-    def _add_dependency(self, tasksweep):
-        task = tasksweep.task
+        tasksweep = TaskSweep(task, sq_paths)
         if task not in self.args._tasksweeps:
             self.args._tasksweeps[task] = tasksweep
         self.args._last_tasksweep = self.args._tasksweeps[task]
@@ -2483,7 +2476,7 @@ class Task(BaseSweepIterator):
         log.info('save {} to {}'.format(self, filename))
 
         file = open(filename, 'w')
-        for line in TabWriter(self).lines():
+        for line in TabWriter(self._to_dict_full()).lines():
             file.write('## {}\n'.format(line))
 
         if self.clen:
@@ -2525,7 +2518,7 @@ class Task(BaseSweepIterator):
         else:
             return repr(value)
 
-    def _to_dict(self):
+    def _to_dict_full(self):
         dct = OrderedDict()
         dct['__class__'] = self.__class__.__name__
         dct['name'] = self.name
@@ -2544,6 +2537,11 @@ class Task(BaseSweepIterator):
                 conf['kwargs'] = kwargs
             config.append(conf)
         dct['config'] = config
+        return dct
+
+    def _to_dict(self):
+        dct = {}
+        dct['__task__'] = repr(self).strip('<>')
         return dct
 
     @classmethod
@@ -2639,14 +2637,15 @@ class Task(BaseSweepIterator):
         s = json.dumps(dct)
         def decode(dct):
             if '__param__' in dct:
-                task = self._get_task(dct['task'], namespace)
-                if dct['__param__'] == 'Argument':
-                    return task.args[dct['name']]
-                else:
-                    return task.returns[dct['name']]
-            elif '__tasksweep__' in dct:
-                task = self._get_task(dct['__tasksweep__'], namespace)
-                return TaskSweep(task, dct.get('squeeze', []))
+                taskname, _, name = dct['__param__'].split('.')
+                task = self._get_task(taskname, namespace)
+                return task.params[name]
+            elif '__task__' in dct:
+                task = self._get_task(dct['__task__'], namespace)
+                return task
+            #~ elif '__tasksweep__' in dct:
+                #~ task = self._get_task(dct['__tasksweep__'], namespace)
+                #~ return TaskSweep(task, dct.get('squeeze', []))
             return dct
         return json.loads(s, object_hook=decode)
 
