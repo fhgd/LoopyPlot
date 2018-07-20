@@ -1242,11 +1242,10 @@ class TaskSweep(BaseSweepIterator):
         super().__init__()
 
         # used for caching
-        self._key_paths = []
+        self._key_paths = self.get_arg_paths()
         self._cidxs = []    # loop over cidxs of task
         self._states = {}   # (last_clen, clen): [{cidxs_of_this_key}, ..]
                             #                     cidx_of_key
-        self._keys = {}     # cidx: key
 
     def __repr__(self):
         args = []
@@ -1274,21 +1273,19 @@ class TaskSweep(BaseSweepIterator):
         if self.clen != self.task.clen:
             self.last_clen = self.clen
             self.clen = self.task.clen
-            self._key_paths = self.get_arg_paths()
             self._cidxs = self.create_states(self.last_clen, self.clen)
             self.idx = 0
 
     def create_states(self, last_clen, clen):
         states = []
         cidxs = []
-        keys = {}   # key: [cidx, ...]
+        keys = {}
         for cidx in range(last_clen, clen):
             key = self.get_key(cidx)
             if key not in keys.keys():
                 cidxs.append(cidx)
             keys.setdefault(key, set()).add(cidx)
             states.append(keys[key])
-            self._keys[cidx] = key
         self._states[self.last_clen, self.clen] = states
         return cidxs
 
@@ -1310,8 +1307,11 @@ class TaskSweep(BaseSweepIterator):
             self.create_states(last_clen, clen)
         return sorted(self._states[last_clen, clen][cidx - last_clen])
 
-    def get_arg_paths(self, sq_paths=[]):
-        return self.task.args._get_arg_paths(self.squeeze + sq_paths)
+    def get_arg_paths(self, sq_paths=[], all=False):
+        return self.task.args._get_arg_paths(self.squeeze + sq_paths, all)
+
+    def get_sq_paths(self, all=False):
+        return self.task.args._get_sq_paths(all) + self.squeeze
 
     def _to_dict(self):
         dct = OrderedDict()
@@ -1555,24 +1555,47 @@ class ArgumentParams(Parameters):
             levels.setdefault(level, []).append(arg)
         return levels
 
-    def _get_arg_paths(self, sq_paths=[]):
+    def _get_arg_paths(self, sq_paths=[], all=False):
         paths = []
         _tasksweeps = set()
         for name, arg in self:
             arg_path = [arg]
+            #~ print('arg_path:', arg_path)
             if arg in self._tasksweep_args.keys():
                 # arg is depending argument
+                #~ print('{} is depending argument'.format(arg))
                 tasksweep = self._tasksweep_args[arg]
                 if arg_path in sq_paths or tasksweep in _tasksweeps:
                     continue
                 _tasksweeps.add(tasksweep)
-                for path in tasksweep.get_arg_paths(sq_paths):
+                for path in tasksweep.get_arg_paths(sq_paths, all):
                     full_path = [arg] + path
                     if full_path not in sq_paths:
                         paths.append(full_path)
-            elif arg_path not in sq_paths:
+            elif arg_path not in sq_paths or all:
                 # arg is local argument
                 paths.append(arg_path)
+        return paths
+
+    def _get_sq_paths(self, all=False):
+        paths = []
+        _tasksweeps = set()
+        for name, arg in self:
+            if arg in self._tasksweep_args.keys():
+                # arg is depending argument
+                tasksweep = self._tasksweep_args[arg]
+                if tasksweep in _tasksweeps:
+                    continue
+                _tasksweeps.add(tasksweep)
+                arg_path = [arg]
+                if all:
+                    sq_paths = tasksweep.get_sq_paths(all)
+                else:
+                    sq_paths = tasksweep.squeeze
+                for path in sq_paths:
+                    full_path = [arg] + path
+                    if full_path not in paths:
+                        paths.append(full_path)
         return paths
 
     def _get_non_squeezed_args(self, sq_args):
@@ -1635,18 +1658,8 @@ class ArgumentParams(Parameters):
         sq_paths = self._task_paths_to_arg_paths(sq_paths)
         return sq_paths
 
-    def _get_key_paths(self, squeeze=''):
-        squeeze = self._get(squeeze)
-        squeeze = self._zipped_paths(squeeze)
-        sq_paths = self._guess_paths(squeeze)
-        key_paths = self._get_depending_args(list(sq_paths))
-        # transform tasks in path into proper args
-        key_paths = self._task_paths_to_arg_paths(key_paths)
-        sq_paths = self._task_paths_to_arg_paths(sq_paths)
-        return key_paths, sq_paths
-
     def _guess_paths(self, squeeze):
-        arg_paths = sorted(self._get_depending_args(all=1), key=len)
+        arg_paths = sorted(self._get_arg_paths(all=True), key=len)
         sq_paths = []
         for sq_path in squeeze:
             #~ print('sq_path:', sq_path)
@@ -2648,7 +2661,7 @@ class Task(BaseSweepIterator):
             self.pm.update(self)
 
     @config
-    def plot(self, x='', y='', squeeze=None, accumulate=None,
+    def plot(self, x='', y='', squeeze=None, accumulate='*',
              row=0, col=0, use_cursor=True, **kwargs):
         self.pm.plot(self, x, y, squeeze, accumulate, row, col,
                      use_cursor, **kwargs)

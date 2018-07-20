@@ -7,6 +7,7 @@ from colorsys import rgb_to_hls, hls_to_rgb
 from collections import OrderedDict, Iterable
 
 from . import utils
+from . import taskmanager
 log = utils.get_plain_logger(__name__)
 
 
@@ -183,7 +184,7 @@ class PlotManager:
                     params = self.xyparams.pop(oldkey)
                     self.xyparams.setdefault(newkey, []).extend(params)
 
-    def plot(self, task, x='', y='', squeeze='', accumulate=None,
+    def plot(self, task, x='', y='', squeeze='', accumulate='*',
              row=0, col=0, use_cursor=True, **kwargs):
         if task not in self.views:
             self.views[task] = self.new_view()
@@ -197,7 +198,13 @@ class PlotManager:
         if isinstance(col, list):
             col = tuple(col)
 
-        xpath = task._get_argpath(x)
+        #~ xpath = task._get_argpath(x)
+        if not x:
+            xpath = []
+        elif isinstance(x, str):
+            xpath = [task.params[x]]
+        else:
+            xpath = x
         if xpath:
             xlabel = self._path_to_short_label(xpath, task)
             xunit = xpath[-1]._unit
@@ -214,12 +221,12 @@ class PlotManager:
             self.ylabel(task, ylabel, yunit, row, col,
                         rotation='vertical',
                         horizontalalignment='center')
-        if squeeze is None and xpath:
-            xparam = xpath[-1]
-            if xparam in xparam._task.args:
-                squeeze = [xparam]
-        else:
-            squeeze = task.args._get(squeeze)
+        if squeeze is None and xpath in task.args._get_arg_paths():
+            squeeze = [xpath]
+        if squeeze:
+            # test if squeeze is NOT a list of list
+            if all(not isinstance(el, (list, tuple)) for el in squeeze):
+                squeeze = [squeeze]
 
         args = dict(
             xpath=xpath,
@@ -606,6 +613,10 @@ class PlotManager:
         line.figure.canvas.flush_events()
 
         xval, yval, cidxs = lmngr.set_cursor_selection(line, idx)
+        log.debug('SELCETION: idx = {}'.format(idx))
+        log.debug('    xval: {}'.format(xval))
+        log.debug('    yval: {}'.format(yval))
+        log.debug('   cidxs: {}'.format(cidxs))
         # ypath legend
         leg_lines = []
         leg_labels = []
@@ -627,19 +638,28 @@ class PlotManager:
         leg_labels.append(label)
         leg_lines.append(line)
         # args legend
-        arg_labels = []
+        sq_labels = []
         # add squeezed args
-        for path in lmngr.squeeze:
+        for path in lmngr._tasksweep.get_sq_paths():
             if tuple(path) in _params or len(path[-1]._states) <= 1:
                 continue
             name = self._path_to_short_label(path, lmngr.task)
-            _cidx = lmngr.task.get_cidx_from_path(path, cidxs[0])
-            val = path[-1].get_cache(_cidx)
+            _cidx = lmngr.task._get_cidx_from_path(path, cidxs[0], fold=0)
+            if path in lmngr.squeeze:
+                val = path[-1].get_cache(_cidx)
+            else:
+                val = path[-1].get_cache(_cidx[idx])
             val_str = self._value_str(val)
             label = '{} = {}'.format(name, val_str)
-            arg_labels.append(label)
+            sq_labels.append(label)
             _params.add(tuple(path))
+        idx_invis = []
+        if sq_labels:
+            leg_lines.append(line)
+            leg_labels.append('\n'.join(sq_labels))
+            idx_invis.append(len(leg_labels) - 1)
         # add line args
+        arg_labels = []
         arg_states = lmngr.get_key(cidxs[0])
         for state, path in zip(arg_states, lmngr._key_paths):
             if tuple(path) in _params or len(path[-1]._states) <= 1:
@@ -656,10 +676,11 @@ class PlotManager:
         if arg_labels:
             leg_lines.append(line)
             leg_labels.append('\n'.join(arg_labels))
+            idx_invis.append(len(leg_labels) - 1)
         # create legend
         leg = lmngr.ax.legend(leg_lines, leg_labels, loc=self.legend_loc)
-        if arg_labels:
-            ln = leg.legendHandles[-1]
+        for _idx in idx_invis:
+            ln = leg.legendHandles[_idx]
             ln.set_visible(False)
             ln._legmarker.set_visible(False)
         view = self.views[lmngr.task]
@@ -750,16 +771,15 @@ class LineManager:
         self.xpath = xpath
         self.ypath = ypath
 
-        # squeeze
-        key_paths, sq_paths = task.args._get_key_paths(squeeze)
-        self.squeeze = sq_paths
-        self._key_paths = key_paths
+        self._tasksweep = taskmanager.TaskSweep(task, squeeze)
+        self._datas = {}
+
         # accumulate
-        if accumulate is None and self.squeeze:
-            accumulate = '*'
         if accumulate == '*':
             acc_paths = self._key_paths
         else:
+            acc_paths = accumulate
+        if 0:
             try:
                 arg_paths = task.args._get_paths(accumulate)
                 self._arg_paths = arg_paths
@@ -786,6 +806,17 @@ class LineManager:
         self.cursor = None
         self._selections = []
         self._cursor = None
+
+        # used for caching
+        self._keys = {}
+
+    @property
+    def _key_paths(self):
+        return self._tasksweep._key_paths
+
+    @property
+    def squeeze(self):
+        return self._tasksweep.squeeze
 
     def create_cursor(self):
         cursor, = self.ax.plot([], [],
@@ -865,39 +896,36 @@ class LineManager:
         return lines
 
     def get_key(self, cidx):
-        # ToDo: results could be cached, maybe in self._keys (cidx: key)
-        keys = []
+        """like tasksweep.get_key() but append None for mask feature"""
+        if cidx in self._keys:
+            return self._keys[cidx]
+        states = []
         for path in self._key_paths:
             if (not self.squeeze
                 and path[0] is not self.ypath[0]
-                and self.ypath[0] in self.task.args):
-                    keys.append(None)
-                    continue
-            _cidx = self.task.get_cidx_from_path(path, cidx)
-            try:
-                state = path[-1].get_arg_state(_cidx[0])
-            except TypeError:
-                state = path[-1].get_arg_state(_cidx)
-            keys.append(state)
-        return tuple(keys)
+                and self.ypath[0] in self.task.args
+            ):
+                states.append(None)
+                continue
+            _cidx = self.task._get_cidx_from_path(path, cidx)
+            state = path[-1].get_arg_state(_cidx)
+            states.append(state)
+        states = tuple(states)
+        self._keys[cidx] = states
+        return states
 
     def update(self):
-        datas = OrderedDict()   # key: cidxs, xvals, yvals
-        for cidx in range(self.clen, self.task.clen):
-            key = self.get_key(cidx)
-            cidxs, xvals, yvals = datas.setdefault(key, ([], [], []))
-            cidxs.append(cidx)
-            if yvals and not self.squeeze:
-                continue
-            if self.xpath:
-                values = self.task.get_value_from_path(self.xpath, cidx)
-                xvals.append(values)
-            values = self.task.get_value_from_path(self.ypath, cidx)
-            yvals.append(values)
-
         ydata = []
         newlines = []
-        for key, (cidxs, xvals, yvals) in datas.items():
+
+        tasksweep = self._tasksweep
+        tasksweep.configure()
+        for state in tasksweep:
+            _, __, cidx = state
+            #~ key = tasksweep._keys[cidx]
+            key = self.get_key(cidx)
+            cidxs = tasksweep.get_cidxs(*state)
+
             if key not in self.lines:
                 line = self.newline()
                 self.lines[key] = line
@@ -910,11 +938,19 @@ class LineManager:
                 if not self.squeeze:
                     continue
 
+            #~ _cidxs = cidxs if self.squeeze else cidxs[0]
+            yvals = self.task.get_value_from_path(self.ypath, cidxs)
             ydata = line.get_ydata()
+            #~ print('ydata: {!r}'.format(ydata))
             ydata = np.append(ydata, yvals)
+            #~ print()
+            #~ print('cidxs:', cidxs)
+            #~ print('yvals:', yvals)
+            #~ print('ydata: {!r}'.format(ydata))
             line.set_ydata(ydata)
 
-            if xvals:
+            if self.xpath:
+                xvals = self.task.get_value_from_path(self.xpath, cidxs)
                 xdata = line.get_xdata()
                 xdata = np.append(xdata, xvals)
             else:
