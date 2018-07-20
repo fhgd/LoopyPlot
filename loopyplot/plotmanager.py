@@ -237,6 +237,11 @@ class PlotManager:
             msg = '\n'.join(msg).format(squeeze, _squeeze)
             log.debug(msg)
 
+        if accumulate != '*':
+            if not isinstance(accumulate, (list, tuple)):
+                accumulate = [accumulate]
+            accumulate = [task.complete_path(path) for path in accumulate]
+
         args = dict(
             xpath=xpath,
             ypath=ypath,
@@ -786,13 +791,7 @@ class LineManager:
         self._datas = {}
 
         # get mask from accumulate-paths
-        self.accumulate = accumulate
-        if accumulate == '*':
-            acc_paths = self._key_paths
-        else:
-            if not isinstance(accumulate, (list, tuple)):
-                accumulate = [accumulate]
-            acc_paths = [task.complete_path(path) for path in accumulate]
+        acc_paths = self._key_paths if accumulate == '*' else accumulate
         self.acc_paths = []
         for path in acc_paths:
             zipped = []
