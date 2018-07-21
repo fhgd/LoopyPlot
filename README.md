@@ -166,6 +166,6 @@ Licence
 
 LoopyPlot is currently licenced under GPL 3. If this licence prevents you
 to either use or contribute to LoopyPlot then please feel free to
-contact me (&#117;&#115;&#101;&#114;:&#032;&#102;&#114;&#105;&#101;&#100;&#114;&#105;&#099;&#104;&#095;&#104;,&#032;&#115;&#101;&#114;&#118;&#101;&#114;:&#032;&#103;&#109;&#120;&#045;&#100;&#111;&#116;&#045;&#100;&#101;).
+contact me (find my email in setup.py).
 It is planed moving to MIT/BSD/Apache/... licence until I understand
 the differences :-)
