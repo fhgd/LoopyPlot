@@ -2717,6 +2717,71 @@ class Task(BaseSweepIterator):
         """
         return task
 
+    def as_dot(self):
+        import pydot as dot
+
+        properties = dict(
+            colorscheme='blues7',
+            color=5,
+            fontcolor=7,
+            fontsize=11,
+            fontname='helvetica',
+        )
+        g = dot.Dot(
+            graph_type='digraph',
+            rankdir='LR'
+        )
+        g.set_node_defaults(
+            shape='record',
+            style='filled, rounded',
+            fillcolor=1,
+            **properties)
+        g.set_edge_defaults(
+            arrowsize=0.5,
+            arrowhead="vee",
+            **properties)
+
+        tasks = set()
+        for task, args in self.depend_tasks.items():
+            tasks.add(task)
+            for arg in args:
+                tasks.add(arg._task)
+                # task => arg
+                param = arg._ptr._param
+                if param in param._task.args:
+                    param_label = param.name
+                else:
+                    param_label = '<<I>{}</I>>'.format(param.name)
+                e = dot.Edge('{}:task'.format(task.name),
+                             '{}:{}'.format(arg._task.name, arg.name),
+                             label=param_label,
+                             labeltooltip='squeeze: {}'.format(
+                                arg._ptr._squeeze))
+                g.add_edge(e)
+        for task in tasks:
+            lines = ['<task>\<{}\>'.format(task.name)]
+            for name, arg in task.args:
+                lines.append('<{arg}>{arg}'.format(arg=arg.name))
+            n = dot.Node(task.name, label=' | '.join(lines))
+            g.add_node(n)
+        return g
+
+    def draw(self, filename='', **kwargs):
+        g = self.as_dot(**kwargs)
+        if filename:
+            if filename.endswith('.pdf'):
+                g.write_pdf(filename)
+            elif filename.endswith('.png'):
+                g.write_png(filename)
+            elif filename.endswith('.svg'):
+                g.write_svg(filename)
+        else:
+            from IPython.display import SVG
+            return SVG(g.create_svg())
+            #~ return g.to_string()
+
+
+
 
 class TabWriter:
     def __init__(self, obj):
