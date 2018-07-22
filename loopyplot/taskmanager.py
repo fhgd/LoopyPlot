@@ -485,6 +485,14 @@ class Concat(BaseSweepIterator):
             classname=self.__class__.__name__,
             args=', '.join(args))
 
+    @property
+    def min(self):
+        return min(s.min for s in self.sweeps.items)
+
+    @property
+    def max(self):
+        return max(s.max for s in self.sweeps.items)
+
 
 class ConcatHold(Concat):
     def next_idx(self):
@@ -604,6 +612,14 @@ class ConcatPointer(BaseSweepIterator):
         return "{classname}({args})".format(
             classname=self.__class__.__name__,
             args=', '.join(args))
+
+    @property
+    def min(self):
+        return min(ptr.min for ptr in self._pointers)
+
+    @property
+    def max(self):
+        return max(ptr.max for ptr in self._pointers)
 
 
 def _value_str(value):
@@ -761,6 +777,14 @@ class ConstantPointer:
     def get_value(self, state):
         return self._value
 
+    @property
+    def min(self):
+        return self.value
+
+    @property
+    def max(self):
+        return self.value
+
 
 class SweepPointer:
     def __init__(self, sweep):
@@ -784,6 +808,14 @@ class SweepPointer:
     @property
     def sweep(self):
         return self._sweep
+
+    @property
+    def min(self):
+        return self._sweep.min
+
+    @property
+    def max(self):
+        return self._sweep.max
 
 
 class SweepFactoryPointer:
@@ -876,6 +908,14 @@ class SweepFactoryPointer:
         tstate = self._tstate[tidx]
         cidx = tstate - 1
         return cidx
+
+    @property
+    def min(self):
+        return self._sweep.min
+
+    @property
+    def max(self):
+        return self._sweep.max
 
 
 def config(func):
