@@ -157,8 +157,9 @@ the folder `LoopyPlot` and
 If necessary this will automatically install the dependencies:
 
 * matplotlib
-* pandas
 * numpy
+* pandas (for pretty print of the value tables)
+* pydot (for drawing the depedency graph)
 
 
 Licence
