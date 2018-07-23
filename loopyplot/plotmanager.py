@@ -186,7 +186,7 @@ class PlotManager:
                     self.xyparams.setdefault(newkey, []).extend(params)
 
     def plot(self, task, x=[], y=[], squeeze='', accumulate='*',
-             row=0, col=0, use_cursor=True, xsort=False, **kwargs):
+             row=0, col=0, use_cursor=True, xsort=None, **kwargs):
         if task not in self.views:
             self.views[task] = self.new_view()
         view = self.views[task]
@@ -241,6 +241,13 @@ class PlotManager:
             if not isinstance(accumulate, (list, tuple)):
                 accumulate = [accumulate]
             accumulate = [task.complete_path(path) for path in accumulate]
+
+        if xsort is None:
+            xsort = False
+            pointers = xpath[-1]._ptrs._pointers
+            Concat = taskmanager.Concat
+            if any(isinstance(p.sweep, Concat) for p in pointers):
+                xsort = True
 
         args = dict(
             xpath=xpath,
