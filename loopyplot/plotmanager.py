@@ -18,6 +18,7 @@ class PlotManager:
         self.views = {}     # task: view
         self.configs = {}   # task: [(cls, args), ...]
         self.labels = {}    # view, row, col, 'x/y': 'xylabel', kwargs
+        self.xlim = {}      # view, row, col: (xmin, xmax)
         self.active = {}    # view: [loc, ...]
         self.windows = {}   # window: None or figure
         self.xyparams = {}   # view, row, col: [params]
@@ -185,6 +186,21 @@ class PlotManager:
                     params = self.xyparams.pop(oldkey)
                     self.xyparams.setdefault(newkey, []).extend(params)
 
+                # join xlims
+                keys = [key for key in self.xlim if key[0] == oldview]
+                for oldkey in self.xlim:
+                    _oldview, row, col = oldkey
+                    if _oldview != oldview:
+                        continue
+                    xmin, xmax = self.xlim.pop(oldkey)
+                    newkey = newview, row, col
+                    if newkey not in self.xlim:
+                        self.xlim[newkey] = xmin, xmax
+                    else:
+                        _xmin, _ymin = self.xlim[newkey]
+                        _xlim = min(xmin, _xmin), max(xmax, _xmax)
+                        self.xlim[newkey] = _xlim
+
     def plot(self, task, x=[], y=[], squeeze='', accumulate='*',
              row=0, col=0, use_cursor=True, xsort=None, **kwargs):
         if task not in self.views:
@@ -236,6 +252,16 @@ class PlotManager:
                    '                from: {!r}']
             msg = '\n'.join(msg).format(squeeze, _squeeze)
             log.debug(msg)
+
+        if squeeze and xpath:
+            key = view, row, col
+            xmin = xpath[-1]._ptrs.min
+            xmax = xpath[-1]._ptrs.max
+            if key not in self.xlim:
+                self.xlim[key] = xmin, xmax
+            else:
+                _xmin, _ymin = self.xlim[key]
+                self.xlim[key] = min(xmin, _xmin), max(xmax, _xmax)
 
         if accumulate != '*':
             if not isinstance(accumulate, (list, tuple)):
@@ -499,6 +525,15 @@ class PlotManager:
             if xunit:
                 xlabel += ' / {}'.format(xunit)
             ax.set_xlabel(xlabel, **kwargs)
+        except KeyError:
+            pass
+        try:
+            xmin, xmax = self.xlim[view, row, col]
+            if None not in (xmin, xmax):
+                offs = 0.025 * abs(xmax - xmin)
+                ax.set_xlim(xmin - offs, xmax + offs)
+            else:
+                ax.set_xlim(xmin, xmax)
         except KeyError:
             pass
         # ylabel in _update()
