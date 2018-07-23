@@ -174,7 +174,7 @@ class Sweep(BaseSweepIterator):
         delta = self.stop - self.start
         if num is None:
             self.step = abs(step) if delta > 0 else -abs(step)
-            num = round(delta / self.step)
+            num = int(delta / self.step)
             self.num = num + 1
         else:
             self.num = num
@@ -999,6 +999,22 @@ class Argument:
         for ptr in self._ptrs._pointers:
             if hasattr(ptr, 'configure'):
                 ptr.configure()
+
+    @config
+    def sweep_bisect(self, start, stop, cycles=3, concat=False):
+        delta = abs(stop - start)
+        sweeps = [Sweep(start, stop, step=delta)]
+        offs = delta / 2.0
+        for n in range(1, cycles + 1):
+            sweep = Sweep(start + offs, stop, step=2*offs)
+            sweeps.append(sweep)
+            offs = offs / 2.0
+        sweep = Concat(*sweeps)
+        if concat:
+            self._ptrs.append(SweepPointer(sweep))
+        else:
+            self._ptr = SweepPointer(sweep)
+        self._task.args._add_sweeped_arg(self)
 
     @config
     def sweep(self, start, stop, step=1, num=None, zip='', concat=False):
@@ -2398,7 +2414,7 @@ class Task(BaseSweepIterator):
 
     @config
     def plot(self, x=[], y=[], squeeze=None, accumulate='*',
-             row=0, col=0, use_cursor=True, xsort=False, **kwargs):
+             row=0, col=0, use_cursor=True, xsort=None, **kwargs):
         self.pm.plot(self, x, y, squeeze, accumulate, row, col,
                      use_cursor, xsort, **kwargs)
         self.plot_update()
