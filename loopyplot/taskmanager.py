@@ -2758,13 +2758,13 @@ class Task(BaseSweepIterator):
             task = namespace[taskname]
         else:
             filename = taskname + '.csv'
-            dct, task = Task._read_csv(filename)
+            dct, task = Task._from_csv(filename)
             namespace[taskname] = task
             task._apply_config(dct, namespace)
         return task
 
     @classmethod
-    def read_csv(cls, filename):
+    def from_csv(cls, filename):
         dct, task = cls._from_csv(filename)
         namespace = {task.name: task}
         task._apply_config(dct, namespace)
@@ -3266,7 +3266,7 @@ class TaskManager:
         tasks = {}  # name: dct, task
         for taskname in dct['tasks']:
             filename = dirname + os.path.sep + taskname + '.csv'
-            dct, task = Task._read_csv(filename)
+            dct, task = Task._from_csv(filename)
             tasks[taskname] = dct, task
             tm._append(task)
             namespace[taskname] = task
@@ -3586,6 +3586,6 @@ if 0:
     mytask.run(0)
 
     mytask.to_csv()
-    mt = Task.read_csv('mytask.csv')
+    mt = Task.from_csv('mytask.csv')
 
 
