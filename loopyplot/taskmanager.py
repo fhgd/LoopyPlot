@@ -2578,7 +2578,26 @@ class Task(BaseSweepIterator):
         dct = OrderedDict()
         dct['__class__'] = self.__class__.__name__
         dct['name'] = self.name
-        dct['func'] = '<some code in file...>'
+        from subprocess import check_output
+        try:
+            hg_root = check_output(['hg', 'root'])
+            hg_path = check_output(['hg', 'path'])
+            hg_id = check_output(['hg', 'id', '-i', '-n'])
+            id, nid = hg_id.decode().rstrip('\n').split()
+            dct['info_hg-path'] = hg_path.decode().rstrip('\n')
+            dct['info_hg-root'] = hg_root.decode().rstrip('\n')
+            dct['info_hg-id'] = '{}:{}'.format(nid.strip('+'), id)
+        except FileNotFoundError:
+            pass
+        if self.func is not None:
+            dct['info_filename'] = self.func.__code__.co_filename
+            dct['info_firstlineno'] = self.func.__code__.co_firstlineno
+            srclns, _ = inspect.getsourcelines(self.func)
+            fmtln = '{{:{}}}'.format(len(str(len(srclns))))
+            src = {}
+            for idx, line in enumerate(srclns):
+                src[fmtln.format(idx)] = line.strip('\n')
+            dct['info_func'] = src
         dct['defaults'] = {n: arg._default._value for n, arg in self.args}
         config = []
         for func, obj, args, kwargs in self._config:
