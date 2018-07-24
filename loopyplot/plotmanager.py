@@ -253,15 +253,15 @@ class PlotManager:
             msg = '\n'.join(msg).format(squeeze, _squeeze)
             log.debug(msg)
 
-        if squeeze and xpath:
-            key = view, row, col
-            xmin = xpath[-1]._ptrs.min
-            xmax = xpath[-1]._ptrs.max
-            if key not in self.xlim:
-                self.xlim[key] = xmin, xmax
-            else:
-                _xmin, _ymin = self.xlim[key]
-                self.xlim[key] = min(xmin, _xmin), max(xmax, _xmax)
+        if squeeze and xpath and hasattr(xpath[-1], '_ptrs'):
+                xmin = xpath[-1]._ptrs.min
+                xmax = xpath[-1]._ptrs.max
+                key = view, row, col
+                if key not in self.xlim:
+                    self.xlim[key] = xmin, xmax
+                else:
+                    _xmin, _xmax = self.xlim[key]
+                    self.xlim[key] = min(xmin, _xmin), max(xmax, _xmax)
 
         if accumulate != '*':
             if not isinstance(accumulate, (list, tuple)):
@@ -270,10 +270,11 @@ class PlotManager:
 
         if xsort is None:
             xsort = False
-            pointers = xpath[-1]._ptrs._pointers
-            Concat = taskmanager.Concat
-            if any(isinstance(p.sweep, Concat) for p in pointers):
-                xsort = True
+            if xpath and hasattr(xpath[-1], '_ptrs'):
+                pointers = xpath[-1]._ptrs._pointers
+                Concat = taskmanager.Concat
+                if any(isinstance(p.sweep, Concat) for p in pointers):
+                    xsort = True
 
         args = dict(
             xpath=xpath,
