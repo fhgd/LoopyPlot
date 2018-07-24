@@ -2646,7 +2646,7 @@ class Task(BaseSweepIterator):
                 arg.state = state
 
     @classmethod
-    def _read_csv(cls, filename):
+    def _from_csv(cls, filename):
         file = open(filename)
         jlines = []
         for line in file:
@@ -2668,12 +2668,14 @@ class Task(BaseSweepIterator):
                 units[name] = unit
 
         dct = json.loads('\n'.join(jlines))
-        task = cls._from_dict(dct)
+        task = cls(name=dct['name'])
 
-        # restore arg units
-        for name, param in task.args:
-            param._unit = units[name]
-
+        # add arguments
+        for name, default in dct['defaults'].items():
+            unit = units[name]
+            arg = Argument(name, default, unit, task)
+            task.args._append(name, arg)
+            task.params._append(name, arg)
         # add return values
         for name in returns:
             unit = units[name]
@@ -2763,43 +2765,9 @@ class Task(BaseSweepIterator):
 
     @classmethod
     def read_csv(cls, filename):
-        dct, task = cls._read_csv(filename)
+        dct, task = cls._from_csv(filename)
         namespace = {task.name: task}
         task._apply_config(dct, namespace)
-        return task
-
-    @classmethod
-    def _from_dict(cls, dct):
-        def func(*args, **kwargs):
-            msg = 'function of task <{}> was not read from csv file'
-            msg = msg.format(dct['name'])
-            raise NotImplementedError(msg)
-            return None
-        func.__name__ = dct['name']
-        task = cls(func)
-
-        del task.returns.out
-        del task.params.out
-        task.returns._params.pop('out')
-        task.params._params.pop('out')
-
-        for name, default in dct['defaults'].items():
-            arg = Argument(name, default, task=task)
-            task.args._append(name, arg)
-            task.params._append(name, arg)
-
-        """
-        for conf in dct['config']:
-            names = conf['cmd'].split('.')
-            if len(names) == 1:
-                func = getattr(task, names[0])
-            else:
-                param = getattr(task.params, names[1])
-                func = getattr(param, names[2])
-            args = conf.get('args', ())
-            kwargs = conf.get('kwargs', {})
-            func(*args, **kwargs)
-        """
         return task
 
     def as_dot(self):
