@@ -2600,6 +2600,51 @@ class Task(BaseSweepIterator):
         dct['__task__'] = repr(self).strip('<>')
         return dct
 
+    def load_cache_from(self, filename):
+        with open(filename) as file:
+            for line in file:
+                if line[0] in '# \n':
+                    continue
+                else:
+                    break
+            header = line
+            args = []
+            returns = []
+            for col in header.split('; '):
+                name, _, unit = col.partition(' / ')
+                if name.startswith('arg_'):
+                    _, __, name = name.partition('arg_')
+                    args.append(name)
+                elif not name.startswith('state_'):
+                    returns.append(name)
+            nargs = len(args)
+            nreturns = len(returns)
+            for name, param in self.params:
+                param._cache = []
+            # read csv data into cache
+            cidx = -1
+            for cidx, line in enumerate(file):
+                columns = line.strip('\n').split('; ')
+                rcolumns = columns[nargs:nargs+nreturns]
+                for param, col in zip(returns, rcolumns):
+                    value = ast.literal_eval(col)
+                    retvalue = self.returns[param]
+                    retvalue._cache.append(value)
+                acolumns = columns[nargs+nreturns:]
+                for param, col in zip(args, acolumns):
+                    value = ast.literal_eval(col)
+                    arg = self.args[param]
+                    arg._cache.append(value)
+                    arg._states.setdefault(value, set()).add(cidx)
+        self.clen = cidx + 1
+        # state recover
+        self.args._configure()
+        self.args._nested._is_initialized = False
+        for name, arg in self.args:
+            if arg._cache:
+                state = arg._cache[-1]
+                arg.state = state
+
     @classmethod
     def _read_csv(cls, filename):
         file = open(filename)
