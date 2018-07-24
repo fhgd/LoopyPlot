@@ -1993,12 +1993,36 @@ class Task(BaseSweepIterator):
     6   5  200  None  3
     7  10  200  None  3
     """
-    def __init__(self, func, name=None, _tm=None):
+    def __init__(self, func=None, name=None, _tm=None):
+        super().__init__()
         self.func = func
-        self.name = func.__name__ if name is None else name
+        if name is None:
+            if func is None:
+                self.name = None
+            else:
+                self.name = func.__name__
+        else:
+            self.name = name
+        self.args = ArgumentParams(task=self)
+        self.returns = ReturnParams(task=self)
+        self.params = Parameters(task=self)
+        if func is not None:
+            self._parse_func(func)
+        self.clen = 0
+        self.em = EventManager()
+        self.am = AxesManager()
+        # new plotmanager
+        self._pm = None
+        log.debug('created task: {}'.format(self))
+        self._config = []
+        self._tm = _tm
+        self._loglevel = None
+
+    def _parse_func(self, func):
         if sys.version_info.major < 3:
             sig = inspect.getargspec(func)
-            defaults = dict(zip_longest(sig.args[::-1], sig.defaults[::-1]))
+            defaults = dict(zip_longest(sig.args[::-1],
+                            sig.defaults[::-1]))
         else:
             defaults = OrderedDict()
             for name, param in inspect.signature(func).parameters.items():
@@ -2008,42 +2032,17 @@ class Task(BaseSweepIterator):
                         defaults[name] = None
                     else:
                         defaults[name] = param.default
-
-        args = ArgumentParams(task=self)
         for n, d in defaults.items():
             unit = func.__annotations__.get(n, None)
-            args._append(n, Argument(n, d, unit, task=self))
-        self.args = args
-
-        returns = ReturnParams(task=self)
+            self.args._append(n, Argument(n, d, unit, task=self))
         names, annovars = return_values(func)
         for name in names:
             unit = annovars.get(name, None)
-            returns._append(name, ReturnValue(name, unit, self))
-        self.returns = returns
-
-        params = Parameters(task=self)
-        for name, arg in args:
-            params._append(name, arg)
-        for name, result in returns:
-            params._append(name, result)
-        self.params = params
-
-        self.clen = 0
-
-        super().__init__()
-
-        self.em = EventManager()
-        self.am = AxesManager()
-
-        # new plotmanager
-        self._pm = None
-        log.debug('created task: {}'.format(self))
-
-        self._config = []
-        self._tm = _tm
-
-        self._loglevel = None
+            self.returns._append(name, ReturnValue(name, unit, self))
+        for name, arg in self.args:
+            self.params._append(name, arg)
+        for name, result in self.returns:
+            self.params._append(name, result)
 
     def reset(self):
         self.args._reset()
@@ -2127,11 +2126,12 @@ class Task(BaseSweepIterator):
         if lines:
             log.info('\n'.join(lines))
             self._loglevel = None
-        _result = self.func(**kwargs)
 
         self.clen += 1
+        if self.func is None:
+            return
+        _result = self.func(**kwargs)
         result = _result
-
         if not isinstance(result, (tuple, list, dict, OrderedDict)):
             result = [result]
 
