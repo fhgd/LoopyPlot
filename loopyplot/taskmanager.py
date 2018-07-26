@@ -1184,11 +1184,124 @@ class Argument:
             self._ptr = ptr
         self._task.args._tasksweep_args[self] = ptr._tasksweep
         ptr._tasksweep.args.append(self)
+
+        # ToDo: add all args from tasksweep.task except the squeezed args
+        #       and not self!
         self._task.args._add_sweeped_arg(self)
+
         args = self._task.args._last_tasksweep_args
         args.append(self)
         if len(args) > 1:
             self._task.args.zip(*self._task.args._last_tasksweep_args)
+
+
+class ResultSweep:
+    def __init__(self, task, squeeze=''):
+        self.task = task
+        self.squeeze = squeeze if squeeze else []
+        self.args = []
+        self.clen = 0
+        self.last_clen = 0
+
+        # used for caching
+        self._key_paths = self.get_arg_paths()
+        self._cidxs = []    # loop over cidxs of task
+        self._states = {}   # (last_clen, clen): [{cidxs_of_this_key}, ..]
+                            #                     cidx_of_key
+
+        self.sweeps = {}   # path_from_key_paths: Sweep(0, ?)
+        # used for caching
+        self._sweeps = {}  # (last_clen, clen): path: Iterate([state, ..])
+
+    def __repr__(self):
+        args = []
+        args.append(repr(self.task))
+        args.append('squeeze={!r}'.format(self.squeeze))
+        return "{classname}({args})".format(
+            classname=self.__class__.__name__,
+            args=', '.join(args))
+
+    def get_key(self, cidx):
+        if not self._key_paths:
+            self._key_paths = self.get_arg_paths()
+        states = []
+        for path in self._key_paths:
+            _cidx = self.task._get_cidx_from_path(path, cidx)
+            state = path[-1].get_arg_state(_cidx)
+            states.append(state)
+        return tuple(states)
+
+    def configure(self):
+        if self.clen != self.task.clen:
+            self.last_clen = self.clen
+            self.clen = self.task.clen
+            self.create_state_sweeps(self.last_clen, self.clen)
+            #~ self._cidxs = self.create_states(self.last_clen, self.clen)
+            #~ self.idx = 0
+
+    def create_state_sweeps(self, last_clen, clen):
+        sweeps = {}
+        for path in self._key_paths:
+            print('path:', path)
+            states = []
+            for state in path[-1]._cache[last_clen:clen]:
+                if state not in states:
+                    states.append(state)
+            sweeps[tuple(path)] = Iterate(*states)
+        self._sweeps[last_clen, clen] = sweeps
+
+    def get_cidxs(self, last_clen, clen, *idxs):
+        # idxs = [sweep.idx, ...]
+        if (last_clen, clen) not in self._sweeps:
+            msg = 'create state sweeps for (last_clen, clen) = ({}, {})'
+            msg = msg.format(last_clen, clen)
+            log.warning(msg)
+            self.create_state_sweeps(last_clen, clen)
+        cidx_sets = []
+        for idx, path in zip(idxs, self._key_paths):
+            sweep = self._sweeps[last_clen, clen][tuple(path)]
+            state = sweep.get_value(idx)
+            cidx_sets.append(path[-1]._states[state])
+        cidxs = sorted(set.intersection(*cidx_sets))
+        return [cidx for cidx in cidxs if last_clen <= cidx < clen]
+
+    @property
+    def value(self):
+        # property should be: 'state' instead of 'value'
+        state = [self.last_clen, self.clen]
+        last_clen, clen = state
+        for path in self._key_paths:
+            sweep = self._sweeps[last_clen, clen][tuple(path)]
+            state.append(sweep.idx)
+        return tuple(state)
+
+    def set_value(self, state):
+        # this method should be state.setter
+        last_clen, clen, *idxs = state
+        self.last_clen = last_clen
+        self.clen = clen
+        if (last_clen, clen) not in self._sweeps:
+            msg = 'create state sweeps for (last_clen, clen) = ({}, {})'
+            msg = msg.format(last_clen, clen)
+            log.warning(msg)
+            self.create_state_sweeps(last_clen, clen)
+        for idx, path in zip(idxs, self._key_paths):
+            sweep = self._sweeps[last_clen, clen][tuple(path)]
+            sweep.idx = idx
+
+    ## this is just copy-paste from TaskSweep ##
+
+    def get_arg_paths(self, sq_paths=[], all=False):
+        return self.task.args._get_arg_paths(self.squeeze + sq_paths, all)
+
+    def get_sq_paths(self, all=False):
+        return self.task.args._get_sq_paths(all) + self.squeeze
+
+    def _to_dict(self):
+        dct = OrderedDict()
+        dct['__tasksweep__'] = self.task.name
+        dct['squeeze'] = self.squeeze
+        return dct
 
 
 class TaskSweep(BaseSweepIterator):
