@@ -1187,12 +1187,30 @@ class Argument:
 
         # ToDo: add all args from tasksweep.task except the squeezed args
         #       and not self!
-        self._task.args._add_sweeped_arg(self)
-
-        args = self._task.args._last_tasksweep_args
-        args.append(self)
-        if len(args) > 1:
-            self._task.args.zip(*self._task.args._last_tasksweep_args)
+        last_tasksweep_args = self._task.args._last_tasksweep_args
+        if len(last_tasksweep_args):
+            first_arg = last_tasksweep_args[0]
+            for path in ptr._tasksweep._key_paths:
+                path = tuple(path)
+                level = self._task.args._nested_args[(first_arg,) + path]
+                self._task.args._nested_args[(self,) + path] = level
+        else:
+            nested_tasksweep_args = {}
+            for path in ptr._tasksweep._key_paths:
+                path = tuple(path)
+                level = ptr._tasksweep.task.args._nested_args.get(path, None)
+                if level is not None:
+                    nested_tasksweep_args[path] = level
+            new_level = max([0] + list(self._task.args._nested_args.values()))
+            new_level += 1
+            level_min = min(nested_tasksweep_args.values())
+            for path in ptr._tasksweep._key_paths:
+                path = tuple(path)
+                other_level = nested_tasksweep_args[path]
+                self._task.args._nested_args[(self,) + path] = (new_level
+                                                                + other_level
+                                                                - level_min)
+        last_tasksweep_args.append(self)
 
 
 class ResultSweep:
@@ -1599,13 +1617,10 @@ class ArgumentParams(Parameters):
         if len(items) < 2:
             msg = 'need at least two items in order to zip'
             raise ValueError(msg)
-        args = []
-        for item in items:
-            arg = self[item] if isinstance(item, str) else item
-            args.append(arg)
-        idx = self._nested_args[args[0]]
-        for arg in args[1:]:
-            self._nested_args[arg] = idx
+        paths = [tuple(self._task.complete_path(item)) for item in items]
+        level = self._nested_args[paths[0]]
+        for path in paths[1:]:
+            self._nested_args[path] = level
 
     @property
     def _nested_levels(self):
@@ -1660,9 +1675,10 @@ class ArgumentParams(Parameters):
                         paths.append(full_path)
         return paths
 
-    def _add_sweeped_arg(self, arg):
-        idx = max([0] + list(self._nested_args.values()))
-        self._nested_args[arg] = idx + 1
+    def _add_sweeped_arg(self, via_path):
+        level = max([0] + list(self._nested_args.values()))
+        path = self._task.complete_path(via_path)
+        self._nested_args[tuple(path)] = level + 1
         #~ self._tasksweeps.pop(arg, None)
 
     def _remove_sweeped_arg(self, arg):
@@ -1675,11 +1691,26 @@ class ArgumentParams(Parameters):
             levels = self._nested_levels
             sweeps = []
             for level in sorted(levels):
-                args = levels[level]
-                if len(args) == 1:
-                    sweep = args[0]._ptrs
+                paths = levels[level]
+                if len(paths) == 1:
+                    # level has only one path (= one sweep)
+                    path = paths[0]
+                    if len(path) == 1:
+                        sweep = path[0]._ptrs
+                    else:
+                        # path[0] is in args._tasksweep_args
+                        pass
                 else:
-                    sweep = Zip(*[arg._ptrs for arg in args])
+                    # level has multiple paths (zip sweeps together)
+                    ptrs = []
+                    for path in paths:
+                        if len(path) == 1:
+                            arg = path[0]
+                            ptrs.append(arg._ptrs)
+                        else:
+                            # path[0] is in args._tasksweep_args
+                            pass
+                    sweep = Zip(*ptrs)
                 sweeps.append(sweep)
             self._nested.sweeps = sweeps
             self._nested._is_initialized = True
