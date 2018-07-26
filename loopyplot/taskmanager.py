@@ -1550,13 +1550,10 @@ class ArgumentParams(Parameters):
         for name, arg in self:
             arg.configure()
         if self._has_changed():
-            nested = {}
-            for arg, idx in self._nested_args.items():
-                args = nested.setdefault(idx, [])
-                args.append(arg)
+            levels = self._nested_levels
             sweeps = []
-            for idx in sorted(nested):
-                args = nested[idx]
+            for level in sorted(levels):
+                args = levels[level]
                 if len(args) == 1:
                     sweep = args[0]._ptrs
                 else:
