@@ -1333,6 +1333,15 @@ class DependParamPointer:
     def _squeeze(self):
         return self._tasksweep.squeeze
 
+    @property
+    def min(self):
+        return None
+        return np.nan
+
+    @property
+    def max(self):
+        return None
+        return np.nan
 
 class ContainerNamespace:
     # read-only attributes except for underscore
