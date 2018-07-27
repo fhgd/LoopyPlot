@@ -1223,13 +1223,8 @@ class ResultSweep:
 
         # used for caching
         self._key_paths = self.get_arg_paths()
-        self._cidxs = []    # loop over cidxs of task
-        self._states = {}   # (last_clen, clen): [{cidxs_of_this_key}, ..]
-                            #                     cidx_of_key
-
-        self.sweeps = {}   # path_from_key_paths: Sweep(0, ?)
-        # used for caching
-        self._sweeps = {}  # (last_clen, clen): path: Iterate([state, ..])
+        self._cidxs = {}    # (last_clen, clen): (path, state): {cidx, ...}
+        self._sweeps = {}   # (last_clen, clen): path: Iterate([state, ..])
 
     def __repr__(self):
         args = []
@@ -1259,16 +1254,36 @@ class ResultSweep:
 
     def create_state_sweeps(self, last_clen, clen):
         sweeps = {}
-        for path in self._key_paths:
-            print('path:', path)
-            states = []
-            for state in path[-1]._cache[last_clen:clen]:
-                if state not in states:
-                    states.append(state)
-            sweeps[tuple(path)] = Iterate(*states)
+        cidxs = {}
+        for cidx in range(last_clen, clen):
+            key = self.get_key(cidx)
+            #~ print('cidx = {:2}  ==>  key = {}'.format(cidx, key))
+            for path, state in zip(self._key_paths, key):
+                path = tuple(path)
+                cidxs.setdefault((path, state), set()).add(cidx)
+                sweep = sweeps.setdefault(path, Iterate())
+                if state not in sweep.items:
+                    sweep.items.append(state)
         self._sweeps[last_clen, clen] = sweeps
+        self._cidxs[last_clen, clen] = cidxs
 
     def get_cidxs(self, last_clen, clen, *idxs):
+        # idxs = [sweep.idx, ...]
+        if (last_clen, clen) not in self._sweeps:
+            msg = 'create state sweeps for (last_clen, clen) = ({}, {})'
+            msg = msg.format(last_clen, clen)
+            log.warning(msg)
+            self.create_state_sweeps(last_clen, clen)
+        cidx_sets = []
+        for idx, path in zip(idxs, self._key_paths):
+            path = tuple(path)
+            sweep = self._sweeps[last_clen, clen][path]
+            state = sweep.get_value(idx)
+            cidx_sets.append(self._cidxs[last_clen, clen][path, state])
+        cidxs = sorted(set.intersection(*cidx_sets))
+        return [cidx for cidx in cidxs if last_clen <= cidx < clen]
+
+    def _get_cidxs(self, last_clen, clen, *idxs):
         # idxs = [sweep.idx, ...]
         if (last_clen, clen) not in self._sweeps:
             msg = 'create state sweeps for (last_clen, clen) = ({}, {})'
@@ -1699,7 +1714,11 @@ class ArgumentParams(Parameters):
                         sweep = path[0]._ptrs
                     else:
                         # path[0] is in args._tasksweep_args
-                        pass
+                        arg = path[0]
+                        tasksweep = self._tasksweep_args[arg]
+                        last_clen = tasksweep.last_clen
+                        clen = tasksweep.clen
+                        sweep = tasksweep._sweeps[last_clen, clen][path[1:]]
                 else:
                     # level has multiple paths (zip sweeps together)
                     ptrs = []
@@ -1709,7 +1728,16 @@ class ArgumentParams(Parameters):
                             ptrs.append(arg._ptrs)
                         else:
                             # path[0] is in args._tasksweep_args
-                            pass
+                            arg = path[0]
+                            tasksweep = self._tasksweep_args[arg]
+                            last_clen = tasksweep.last_clen
+                            clen = tasksweep.clen
+                            swp = tasksweep._sweeps[last_clen, clen][path[1:]]
+                            if swp not in ptrs:
+                                ptrs.append(swp)
+                            # ToDo:
+                            #    concatenation of depending args is not
+                            #    supported right now
                     sweep = Zip(*ptrs)
                 sweeps.append(sweep)
             self._nested.sweeps = sweeps
@@ -2403,7 +2431,8 @@ class Task(BaseSweepIterator):
         if not isinstance(squeeze, (list, tuple)):
             squeeze = [squeeze]
         sq_paths = [task.complete_path(path) for path in squeeze]
-        tasksweep = TaskSweep(task, sq_paths)
+        #~ tasksweep = TaskSweep(task, sq_paths)
+        tasksweep = ResultSweep(task, sq_paths)
         if task not in self.args._tasksweeps:
             self.args._tasksweeps[task] = tasksweep
         self.args._last_tasksweep = self.args._tasksweeps[task]
