@@ -1188,6 +1188,7 @@ class Argument:
         # ToDo: add all args from tasksweep.task except the squeezed args
         #       and not self!
         last_tasksweep_args = self._task.args._last_tasksweep_args
+        #~ print(last_tasksweep_args)
         if len(last_tasksweep_args):
             first_arg = last_tasksweep_args[0]
             for path in ptr._tasksweep._key_paths:
@@ -1203,14 +1204,19 @@ class Argument:
                     nested_tasksweep_args[path] = level
             new_level = max([0] + list(self._task.args._nested_args.values()))
             new_level += 1
-            level_min = min(nested_tasksweep_args.values())
+            print('nested_tasksweep_args:', nested_tasksweep_args)
+            #~ level_min = min(nested_tasksweep_args.values())
+            level_min = min(nested_tasksweep_args.values(), default=0)
             for path in ptr._tasksweep._key_paths:
                 path = tuple(path)
-                other_level = nested_tasksweep_args[path]
-                self._task.args._nested_args[(self,) + path] = (new_level
-                                                                + other_level
-                                                                - level_min)
+                if path in nested_tasksweep_args:
+                    other_level = nested_tasksweep_args[path]
+                    self._task.args._nested_args[(self,) + path] = (new_level
+                                                                    + other_level
+                                                                    - level_min)
         last_tasksweep_args.append(self)
+        args = self._args_by_tasksweep.setdefault(ptr._tasksweep, [])
+        args.append(self)
 
 
 class TaskSweep:
@@ -1223,8 +1229,9 @@ class TaskSweep:
 
         # used for caching
         self._key_paths = self.get_arg_paths()
-        self._cidxs = {}    # (last_clen, clen): (path, state): {cidx, ...}
-        self._sweeps = {}   # (last_clen, clen): path: Iterate([state, ..])
+        #~ self._key_paths = []  # [[arg, ...], path, ...]
+        self._cidxs = {}   # (last_clen, clen): (path, state): {cidx, ...}
+        self._sweeps = {}  # (last_clen, clen): path: Iterate([state, ..])
 
     def __repr__(self):
         args = []
@@ -1245,6 +1252,7 @@ class TaskSweep:
         return tuple(states)
 
     def configure(self):
+        self._key_paths = self.get_arg_paths()
         if self.clen != self.task.clen:
             self.last_clen = self.clen
             self.clen = self.task.clen
@@ -1274,7 +1282,7 @@ class TaskSweep:
             msg = msg.format(last_clen, clen)
             log.warning(msg)
             self.create_state_sweeps(last_clen, clen)
-        cidx_sets = []
+        cidx_sets = [set(range(last_clen, clen))]
         for idx, path in zip(idxs, self._key_paths):
             path = tuple(path)
             sweep = self._sweeps[last_clen, clen][path]
@@ -1284,8 +1292,11 @@ class TaskSweep:
         return [cidx for cidx in cidxs if last_clen <= cidx < clen]
 
     @property
-    def value(self):
-        # property should be: 'state' instead of 'value'
+    def sweeps(self):
+        return self._sweeps[self.last_clen, self.clen]
+
+    @property
+    def state(self):
         state = [self.last_clen, self.clen]
         last_clen, clen = state
         for path in self._key_paths:
@@ -1293,8 +1304,8 @@ class TaskSweep:
             state.append(sweep.idx)
         return tuple(state)
 
+    @state.setter
     def set_value(self, state):
-        # this method should be state.setter
         last_clen, clen, *idxs = state
         self.last_clen = last_clen
         self.clen = clen
@@ -1329,11 +1340,11 @@ class DependParamPointer:
 
     @property
     def state(self):
-        return self._tasksweep.value
+        return self._tasksweep.state
 
     @state.setter
     def state(self, value):
-        self._tasksweep.set_value(value)
+        self._tasksweep.state = value
 
     def get_value(self, state):
         try:
@@ -1485,8 +1496,11 @@ class ArgumentParams(Parameters):
         super().__init__(task)
         self._nested = Nested()
         self._nested_args = {}
+        # ToDo: rename _tasksweeps into _tasksweeps_by_task
         self._tasksweeps = {}           # task: tasksweep
         self._tasksweep_args = {}       # arg:  tasksweep
+        # ToDo: rename _args_by_tasksweep into _tasksweeps
+        self._args_by_tasksweep = {}    # {tasksweep: [arg, ...]}
 
         # used as cache for configuration
         self._last_tasksweep = None
@@ -1513,14 +1527,19 @@ class ArgumentParams(Parameters):
                 line += '\t({}/{}):\t{}'.format(sweep.idx + 1, len(sweep),
                                                 ptr_repr)
             elif isinstance(ptr, DependParamPointer):
-                sweep = ptr.sweep
-                ptr_repr = 'from {!r}'.format(ptr._param)
-                squeeze = ptr._tasksweep.squeeze
-                if squeeze:
-                    squeeze_str = ', '.join(repr(path) for path in squeeze)
-                    ptr_repr += ', squeeze {}'.format(squeeze_str)
-                line += '\t({}/{}):\t{}'.format(sweep.idx + 1, len(sweep),
-                                                ptr_repr)
+                line += '\n' + ' ' * maxlen
+                line += '   depends on: {!r}'.format(ptr._param)
+                tswp = ptr._tasksweep
+                for path in tswp.squeeze:
+                    path = ', '.join(str(param) for param in path)
+                    line += '\n' + ' ' * maxlen
+                    line += '     squeezed: {}'.format(path)
+                #~ for path, sweep in tswp.sweeps.items():
+                    #~ path = list(path)
+                    #~ msg = '\n        ({}/{}): {}'
+                    #~ msg = msg.format(sweep.idx + 1, len(sweep), path)
+                    #~ line += msg
+                #~ line += '\n'
             lines.append(line)
         return '\n'.join(lines)
 
@@ -2182,9 +2201,9 @@ class Task(BaseSweepIterator):
                 const_lines.append(line)
         lines = []
         hmax = 8
+        indent = 8
         if sweeped_lines:
             lines.append('    looping args:')
-            indent = 8
             hmax = max(len(head) for head, line in sweeped_lines.values())
             for nlev in reversed(sorted(sweeped_lines)):
                 head, line = sweeped_lines[nlev]
