@@ -1183,40 +1183,18 @@ class Argument:
         else:
             self._ptr = ptr
         self._task.args._tasksweep_args[self] = ptr._tasksweep
-        ptr._tasksweep.args.append(self)
 
-        # ToDo: add all args from tasksweep.task except the squeezed args
-        #       and not self!
-        last_tasksweep_args = self._task.args._last_tasksweep_args
-        #~ print(last_tasksweep_args)
-        if len(last_tasksweep_args):
-            first_arg = last_tasksweep_args[0]
-            for path in ptr._tasksweep._key_paths:
-                path = tuple(path)
-                level = self._task.args._nested_args[(first_arg,) + path]
-                self._task.args._nested_args[(self,) + path] = level
-        else:
-            nested_tasksweep_args = {}
-            for path in ptr._tasksweep._key_paths:
-                path = tuple(path)
-                level = ptr._tasksweep.task.args._nested_args.get(path, None)
-                if level is not None:
-                    nested_tasksweep_args[path] = level
-            new_level = max([0] + list(self._task.args._nested_args.values()))
-            new_level += 1
-            print('nested_tasksweep_args:', nested_tasksweep_args)
-            #~ level_min = min(nested_tasksweep_args.values())
-            level_min = min(nested_tasksweep_args.values(), default=0)
-            for path in ptr._tasksweep._key_paths:
-                path = tuple(path)
-                if path in nested_tasksweep_args:
-                    other_level = nested_tasksweep_args[path]
-                    self._task.args._nested_args[(self,) + path] = (new_level
-                                                                    + other_level
-                                                                    - level_min)
-        last_tasksweep_args.append(self)
-        args = self._args_by_tasksweep.setdefault(ptr._tasksweep, [])
+        # just to remember the nested sweep level
+        # the path in args._nested_args must be overwitten
+        # in args._configure()
+        self._task.args._add_sweeped_arg(self)
+
+        self._task.args._last_tasksweep_args.append(self)
+        t = ptr._tasksweep
+        args = self._task.args._args_by_tasksweep.setdefault(t, [])
         args.append(self)
+        # ToDo: try to remove tasksweep.args
+        ptr._tasksweep.args.append(self)
 
 
 class TaskSweep:
@@ -1370,9 +1348,6 @@ class DependParamPointer:
     @property
     def sweep(self):
         return self._tasksweep
-
-    def configure(self):
-        self._tasksweep.configure()
 
     @property
     def task(self):
@@ -1615,6 +1590,30 @@ class ArgumentParams(Parameters):
         self._nested_args.pop(arg, None)
 
     def _configure(self):
+        for tasksweep, args in self._args_by_tasksweep.items():
+            #~ print('tasksweep:', tasksweep)
+            tasksweep.configure()
+            nested_args_from_tasksweep_task = {}
+            for path in tasksweep._key_paths:
+                path = tuple(path)
+                level = tasksweep.task.args._nested_args.get(path, None)
+                if level is not None:
+                    nested_args_from_tasksweep_task[path] = level
+            tasksweep_levels = nested_args_from_tasksweep_task.values()
+            level_min = min(tasksweep_levels, default=0)
+            for arg in args:
+                #~ print('arg:', arg)
+                level = self._nested_args.pop((arg,), None)
+                if level is None:
+                    continue
+                for path in tasksweep._key_paths:
+                    path = tuple(path)
+                    #~ print('path:', path)
+                    if path in nested_args_from_tasksweep_task:
+                        other_level = nested_args_from_tasksweep_task[path]
+                        self._nested_args[(arg,) + path] = (level
+                                                            + other_level
+                                                            - level_min)
         for name, arg in self:
             arg.configure()
         if self._has_changed():
