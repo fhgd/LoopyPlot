@@ -1408,6 +1408,13 @@ class DependParamPointer:
         assert param._task is tasksweep.task, msg
         self._param = param
         self._tasksweep = tasksweep
+        # used for caching
+        self._min = None
+        self._max = None
+
+    def configure(self):
+        self._min = None
+        self._max = None
 
     @property
     def state(self):
@@ -1455,13 +1462,25 @@ class DependParamPointer:
 
     @property
     def min(self):
-        return None
-        return np.nan
+        if self._min is None:
+            values = []
+            start = self._tasksweep.last_clen
+            stop = self._tasksweep.clen
+            for cidx in range(start, stop):
+                values.append(self._param.get_cache(cidx))
+            self._min = min(values, default=np.nan)
+        return self._min
 
     @property
     def max(self):
-        return None
-        return np.nan
+        if self._max is None:
+            values = []
+            start = self._tasksweep.last_clen
+            stop = self._tasksweep.clen
+            for cidx in range(start, stop):
+                values.append(self._param.get_cache(cidx))
+            self._max = max(values, default=np.nan)
+        return self._max
 
 
 class ContainerNamespace:

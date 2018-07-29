@@ -530,11 +530,11 @@ class PlotManager:
             pass
         try:
             xmin, xmax = self.xlim[view, row, col]
-            if None not in (xmin, xmax):
+            if np.nan not in (xmin, xmax):
                 offs = 0.025 * abs(xmax - xmin)
                 ax.set_xlim(xmin - offs, xmax + offs)
             else:
-                ax.set_xlim(xmin, xmax)
+                ax.set_xlim(None, None)
         except KeyError:
             pass
         # ylabel in _update()
