@@ -832,7 +832,7 @@ class LineManager:
 
         if squeeze:
             squeeze = [squeeze]
-        self._tasksweep = taskmanager.TaskSweep(task, squeeze)
+        self._tasksweep = taskmanager._PlotSweep(task, squeeze)
         self._datas = {}
 
         # get mask from accumulate-paths
