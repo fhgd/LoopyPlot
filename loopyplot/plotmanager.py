@@ -242,11 +242,16 @@ class PlotManager:
             self.ylabel(task, ylabel, yunit, row, col,
                         rotation='vertical',
                         horizontalalignment='center')
+
         _squeeze = squeeze
-        if squeeze is None and xpath in task.args._get_arg_paths():
-            squeeze = xpath
-        else:
-            squeeze = task.complete_path(squeeze)
+        if squeeze is None and (xpath in task.args._get_arg_paths() or
+                                xpath and xpath[-1] in task.args
+        ):
+            squeeze = [xpath]
+        elif squeeze != '*':
+            if not isinstance(squeeze, (list, tuple)):
+                squeeze = [squeeze]
+            squeeze = [task.complete_path(path) for path in squeeze]
         if squeeze != _squeeze:
             msg = ['squeeze is completed: {}',
                    '                from: {!r}']
@@ -660,7 +665,14 @@ class PlotManager:
         elif isinstance(value, (int, float, complex)):
             return '{:.7g}'.format(value)
         elif isinstance(value, Iterable):
-            return r'$[{:.4g}, \ldots]$'.format(value[0])
+            try:
+                return r'$[{:.4g}, \ldots]$'.format(value[0])
+            except TypeError:
+                value = repr(value)
+                if len(value) > 8:
+                    return value[:8] + '...'
+                else:
+                    return value
         else:
             return repr(value)
 
@@ -830,8 +842,8 @@ class LineManager:
         self.ypath = ypath
         self.xsort = xsort
 
-        if squeeze:
-            squeeze = [squeeze]
+        if squeeze == '*':
+            squeeze = task.args._get_arg_paths()
         self._tasksweep = taskmanager._PlotSweep(task, squeeze)
         self._datas = {}
 
