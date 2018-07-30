@@ -927,7 +927,7 @@ def config(func):
             task = self
         config = func, self, args, kwargs
         task._config.append(config)
-        func(self, *args, **kwargs)
+        return func(self, *args, **kwargs)
     return myfunc
 
 
@@ -1160,7 +1160,7 @@ class Argument:
         self._task.args.zip(self, *items)
 
     @config
-    def depends_on(self, param, concat=False):
+    def depends_on(self, param, auto_zip=True, concat=False):
         #~ self._task.args._remove_sweeped_arg(self)
         task = param._task
         if self._task.args._last_tasksweep is None:
@@ -1184,22 +1184,33 @@ class Argument:
             self._ptr = ptr
         self._task.args._tasksweep_args[self] = ptr._tasksweep
 
+        level, args = self._task.args._args_by_tasksweep[ptr._tasksweep]
+        args.append(self)
+
         # just to remember the nested sweep level
         # the path in args._nested_args must be overwitten
         # in args._configure()
-        self._task.args._add_sweeped_arg(self)
-
-        t = ptr._tasksweep
-        args = self._task.args._args_by_tasksweep.setdefault(t, [])
-        args.append(self)
-
-        args = self._task.args._last_tasksweep_args
-        args.append(self)
-        if len(args) > 1:
-            self._task.args.zip(*self._task.args._last_tasksweep_args)
+        self._task.args._nested_args[self,] = level
 
         # ToDo: try to remove tasksweep.args
         ptr._tasksweep.args.append(self)
+
+        self._task.args._configure_tasksweeps()
+
+        # ToDo: zip all paths in nested_args with the same last arg
+        last_params = {}
+        if auto_zip:
+            nested_args = self._task.args._nested_args
+            for path, level in nested_args.items():
+                paths, levels = last_params.setdefault(path[-1], ([], []))
+                paths.append(path)
+                levels.append(level)
+            for paths, levels in last_params.values():
+                if len(paths) > 1:
+                    level = min(levels)
+                    for path in paths:
+                        nested_args[path] = level
+        return last_params
 
 
 class _PlotSweep(BaseSweepIterator):
@@ -1591,7 +1602,6 @@ class ArgumentParams(Parameters):
 
         # used as cache for configuration
         self._last_tasksweep = None
-        self._last_tasksweep_args = []  # [arg, ...]
 
     def __repr__(self):
         maxlen = max([0] + [len(param._uname) for name, param in self])
@@ -1701,26 +1711,30 @@ class ArgumentParams(Parameters):
     def _remove_sweeped_arg(self, arg):
         self._nested_args.pop(arg, None)
 
-    def _configure(self):
-        for tasksweep, args in self._args_by_tasksweep.items():
+    def _configure_tasksweeps(self):
+        for tasksweep, (level, args) in self._args_by_tasksweep.items():
             #~ print('tasksweep:', tasksweep)
             tasksweep.configure()
             tasksweep_nested_args = {}
-            tasksweep_nested_args = {}
             for path in tasksweep._key_paths:
                 path = tuple(path)
+                #~ print('_path:', path)
                 level = tasksweep.task.args._nested_args.get(path, None)
+                #~ print('_level:', level)
                 if level is not None:
                     tasksweep_nested_args[path] = level
+            #~ print('tasksweep_nested_args:', tasksweep_nested_args)
             tasksweep_levels = tasksweep_nested_args.values()
             level_min = min(tasksweep_levels, default=0)
             touched_paths = set()
             for arg in args:
                 #~ print('arg:', arg)
-                level = self._nested_args.pop((arg,), None)
+
+                level = self._nested_args.get((arg,), None)
                 if level is None:
                     continue
                 #~ print('level:', level)
+
                 for path in tasksweep._key_paths:
                     path = tuple(path)
                     #~ print('path:', path)
@@ -1743,6 +1757,15 @@ class ArgumentParams(Parameters):
                         touched_paths.add(new_path)
                         #~ print('nested_args:', self._nested_args)
                         #~ print()
+
+    def _configure(self):
+        self._configure_tasksweeps()
+
+        # remove placeholder from tasksweep args
+        for tasksweep, (level, args) in self._args_by_tasksweep.items():
+            for arg in args:
+                self._nested_args.pop((arg,), None)
+
         for name, arg in self:
             arg.configure()
         if self._has_changed():
@@ -2478,7 +2501,11 @@ class Task(BaseSweepIterator):
         if task not in self.args._tasksweeps:
             self.args._tasksweeps[task] = tasksweep
         self.args._last_tasksweep = self.args._tasksweeps[task]
-        self.args._last_tasksweep_args = []
+
+        level = max([0] + list(self.args._nested_args.values()))
+        self.args._args_by_tasksweep[tasksweep] = level + 1, []
+
+        # let self._pm pointing to task._pm
 
     @property
     def depend_tasks(self):
