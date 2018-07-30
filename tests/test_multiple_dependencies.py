@@ -222,7 +222,8 @@ def test_4(task_setup):
              '7  [25, 35, 45]    10        10        25  3905']
     assert repr(df).split('\n') == lines
 
-    three.add_dependency(two, squeeze=[[two, one.args.offs]])
+    three.add_dependency(two, squeeze=[[two, one.args.offs]],
+                              auto_zip=False)
     three.args.x2.depends_on(two.returns.y)
 
     path = three.args._last_tasksweep.squeeze
@@ -247,6 +248,62 @@ def test_4(task_setup):
              '13   [0, 10, 20]  [530, 3905]',
              '14  [25, 26, 27]  [530, 3905]',
              '15  [25, 35, 45]  [530, 3905]']
+    assert repr(df).split('\n') == lines
+
+
+def test_4_with_auto_zip(task_setup):
+    one, two, three, four = task_setup
+
+    one.args.gain.iterate(1, 10)
+    one.args.offs.iterate(0, 25)
+    one.run()
+    df = one.returns.as_table()
+    lines = ['    x  gain  offs   y',
+             '0   0     1     0   0',
+             '1   1     1     0   1',
+             '2   2     1     0   2',
+             '3   0    10     0   0',
+             '4   1    10     0  10',
+             '5   2    10     0  20',
+             '6   0     1    25  25',
+             '7   1     1    25  26',
+             '8   2     1    25  27',
+             '9   0    10    25  25',
+             '10  1    10    25  35',
+             '11  2    10    25  45']
+    assert repr(df).split('\n') == lines
+
+    two.run()
+    df = two.returns.as_table(include_dep_args=True)
+    lines = ['              x  offs  one|gain  one|offs     y',
+             '0     [0, 1, 2]     0         1         0     5',
+             '1     [0, 1, 2]    10         1         0    35',
+             '2   [0, 10, 20]     0        10         0   500',
+             '3   [0, 10, 20]    10        10         0   530',
+             '4  [25, 26, 27]     0         1        25  2030',
+             '5  [25, 26, 27]    10         1        25  2060',
+             '6  [25, 35, 45]     0        10        25  3875',
+             '7  [25, 35, 45]    10        10        25  3905']
+    assert repr(df).split('\n') == lines
+
+    three.add_dependency(two, squeeze=[[two, one.args.offs]])
+    three.args.x2.depends_on(two.returns.y)
+
+    path = three.args._last_tasksweep.squeeze
+    assert path == [[two.args.x, one.args.offs]]
+
+    three.run()
+    df = three.args.as_table(include_dep_args=False)
+
+    lines = ['             x1           x2',
+             '0     [0, 1, 2]    [5, 2030]',
+             '1   [0, 10, 20]  [500, 3875]',
+             '2  [25, 26, 27]    [5, 2030]',
+             '3  [25, 35, 45]  [500, 3875]',
+             '4     [0, 1, 2]   [35, 2060]',
+             '5   [0, 10, 20]  [530, 3905]',
+             '6  [25, 26, 27]   [35, 2060]',
+             '7  [25, 35, 45]  [530, 3905]']
     assert repr(df).split('\n') == lines
 
 
@@ -287,7 +344,8 @@ def test_5(task_setup):
              '7  [25, 35, 45]    10  3905']
     assert repr(df).split('\n') == lines
 
-    three.add_dependency(two, squeeze=[one.args.offs, two.args.offs])
+    three.add_dependency(two, squeeze=[one.args.offs, two.args.offs],
+                              auto_zip=False)
     three.args.x2.depends_on(two.returns.y)
     #~ three.args.x2.depends_on(two.args.x)
 
@@ -318,7 +376,8 @@ def test_6(task_setup):
 
     two.run()
 
-    three.add_dependency(two, squeeze=[one.args.offs, two.args.offs])
+    three.add_dependency(two, squeeze=[one.args.offs, two.args.offs],
+                              auto_zip=False)
     three.args.x2.depends_on(two.returns.y)
 
     three.run()
@@ -334,7 +393,7 @@ def test_6(task_setup):
              '7  [25, 35, 45]  [500, 530, 3875, 3905]']
     assert repr(df).split('\n') == lines
 
-    four.add_dependency(three)
+    four.add_dependency(three, auto_zip=False)
     four.args.x1.depends_on(three.args.x1)
     four.args.x2.depends_on(three.args.x2)
 
