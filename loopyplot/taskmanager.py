@@ -2257,7 +2257,8 @@ class Task(BaseSweepIterator):
         self.em = EventManager()
         self.am = AxesManager()
         # new plotmanager
-        self._pm = None
+        self._pm = []
+
         log.debug('created task: {}'.format(self))
         self._config = []
         self._tm = _tm
@@ -2299,7 +2300,8 @@ class Task(BaseSweepIterator):
         for name, param in self.params:
             param._reset()
         if self._pm:
-            self._pm._reset()
+            pm = self._pm[0]
+            pm._reset()
 
     def __repr__(self):
         return '<{}>'.format(self.name)
@@ -2514,6 +2516,8 @@ class Task(BaseSweepIterator):
         self.args._nested_level += 1
 
         # let self._pm pointing to task._pm
+        self._pm = task._pm
+        self.pm.join_views(task, self)
 
     @property
     def depend_tasks(self):
@@ -2720,15 +2724,13 @@ class Task(BaseSweepIterator):
 
     @property
     def pm(self):
-        if self._tm is None:
-            if self._pm is None:
-                plevel = plotmanager.log.level
-                plotmanager.log.setLevel('WARNING')
-                self._pm = plotmanager.PlotManager()
-                plotmanager.log.level = plevel
-        else:
-            self._pm = self._tm.pm
-        return self._pm
+        if len(self._pm) == 0:
+            plevel = plotmanager.log.level
+            plotmanager.log.setLevel('WARNING')
+            pm = plotmanager.PlotManager()
+            plotmanager.log.level = plevel
+            self._pm.append(pm)
+        return self._pm[0]
 
     def _plot(self, x='', y='', sweeped_arg='', row=0, col=0):
         try:
