@@ -331,7 +331,7 @@ class PlotManager:
         key = view, row, col, 'y'
         if (label or unit) and key not in self.labels:
             self.labels[key] = label, unit, kwargs
-            log.debug('key is new:', key)
+            log.debug('key is new: {}'.format(key))
         elif (label or unit) and unit == self.labels[key][1]:
             self.labels[key] = '', unit, kwargs
             log.debug('key has same units but different labels')

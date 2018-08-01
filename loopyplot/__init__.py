@@ -38,6 +38,8 @@ which results in a matplotlib figure with an interactive data cursor.
 
 from .taskmanager import Task, TaskManager, log
 from .plotmanager import PlotManager
+from .plotmanager import log as log_pm
 
 from .utils import enable_logger
 enable_logger(log, 'info', 'short')
+enable_logger(log_pm, 'info', 'short')
