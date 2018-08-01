@@ -2703,9 +2703,12 @@ class Task(BaseSweepIterator):
     @config
     def plot(self, x=[], y=[], squeeze=None, accumulate='*',
              row=0, col=0, use_cursor=True, xsort=None, **kwargs):
+        plevel = plotmanager.log.level
+        plotmanager.log.setLevel('WARNING')
         self.pm.plot(self, x, y, squeeze, accumulate, row, col,
                      use_cursor, xsort, **kwargs)
         self.plot_update()
+        plotmanager.log.level = plevel
 
     @property
     def pm(self):
