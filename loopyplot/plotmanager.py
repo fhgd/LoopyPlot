@@ -143,6 +143,9 @@ class PlotManager:
 
     def join_views(self, *tasks):
         if len(tasks) > 1:
+            for task in tasks:
+                if task not in self.views:
+                    self.views[task] = self.new_view()
             newview = self.views[tasks[0]]
             for task in tasks[1:]:
                 oldview = self.views[task]
@@ -188,7 +191,7 @@ class PlotManager:
 
                 # join xlims
                 keys = [key for key in self.xlim if key[0] == oldview]
-                for oldkey in self.xlim:
+                for oldkey in keys:
                     _oldview, row, col = oldkey
                     if _oldview != oldview:
                         continue
@@ -197,11 +200,11 @@ class PlotManager:
                     if newkey not in self.xlim:
                         self.xlim[newkey] = xmin, xmax
                     else:
-                        _xmin, _ymin = self.xlim[newkey]
+                        _xmin, _xmax = self.xlim[newkey]
                         _xlim = min(xmin, _xmin), max(xmax, _xmax)
                         self.xlim[newkey] = _xlim
 
-    def plot(self, task, x=[], y=[], squeeze='', accumulate='*',
+    def plot(self, task, x=[], y=[], squeeze=[], accumulate='*',
              row=0, col=0, use_cursor=True, xsort=None, **kwargs):
         if task not in self.views:
             self.views[task] = self.new_view()
@@ -355,6 +358,8 @@ class PlotManager:
 
     def _update_loc(self, loc, task):
         """update view location loc with data from task"""
+        if task not in self.configs:
+            return
         newlines = {}
         for idx, (row, col, cls, args) in enumerate(self.configs[task]):
             lm = self.lms.get(loc, {}).get(task, {}).get(idx, None)
@@ -427,6 +432,7 @@ class PlotManager:
             tasks = set(view_tasks)
             if self.is_window_closed(loc[0]):
                 log.info('window {} was closed'.format(loc[0]))
+                self.windows[loc[0]] = None
                 self.axes.pop(loc, None)
                 confs_by_task = self.lms.get(loc, {})
                 for conf in confs_by_task.values():
@@ -538,8 +544,6 @@ class PlotManager:
             if np.nan not in (xmin, xmax):
                 offs = 0.025 * abs(xmax - xmin)
                 ax.set_xlim(xmin - offs, xmax + offs)
-            else:
-                ax.set_xlim(None, None)
         except KeyError:
             pass
         # ylabel in _update()
@@ -710,8 +714,8 @@ class PlotManager:
         # args legend
         sq_labels = []
         # add squeezed args
-        for path in lmngr._tasksweep.get_sq_paths():
-            if tuple(path) in _params or len(path[-1]._states) <= 1:
+        for path in lmngr.squeeze:
+            if not path or path in _params or len(path[-1]._states) <= 1:
                 continue
             name = self._path_to_short_label(path, lmngr.task)
             _cidx = lmngr.task._get_cidx_from_path(path, cidxs[0], fold=0)
@@ -879,7 +883,7 @@ class LineManager:
 
     @property
     def squeeze(self):
-        return self._tasksweep.squeeze
+        return [tuple(path) for path in self._tasksweep.squeeze]
 
     def create_cursor(self):
         cursor, = self.ax.plot([], [],
@@ -930,21 +934,23 @@ class LineManager:
             except IndexError:
                 cursor = self.create_cursor()
                 self._selections.append(cursor)
+            line_xdata = line.get_xdata()
+            line_ydata = line.get_ydata()
             if self.squeeze:
                 line_cidxs = self.cidxs[line]
                 idx = line_cidxs.index(cidx)
-                xdata = line.get_xdata()[idx]
-                ydata = line.get_ydata()[idx]
+                xdata = line_xdata[idx]
+                ydata = line_ydata[idx]
                 cursor.set_marker('o')
                 cursor.set_linestyle('')
-            elif ln_idx is not None:
-                xdata = line.get_xdata()[ln_idx]
-                ydata = line.get_ydata()[ln_idx]
+            elif ln_idx is not None and ln_idx < len(line_xdata):
+                xdata = line_xdata[ln_idx]
+                ydata = line_ydata[ln_idx]
                 cursor.set_marker('o')
                 cursor.set_linestyle('')
             else:
-                xdata = line.get_xdata()
-                ydata = line.get_ydata()
+                xdata = line_xdata
+                ydata = line_ydata
                 cursor.set_marker(None)
                 cursor.set_linestyle('-')
             cursor.set_data([xdata, ydata])
