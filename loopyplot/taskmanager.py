@@ -2999,8 +2999,11 @@ class Task(BaseSweepIterator):
                 state = arg._cache[-1]
                 arg.state = state
         # apply plot commands
+        plevel = plotmanager.log.level
+        plotmanager.log.setLevel('WARNING')
         for func, args, kwargs in plot_cmds:
             func(*args, **kwargs)
+        plotmanager.log.level = plevel
 
 
     def _dct_to_dct(self, dct, namespace):
