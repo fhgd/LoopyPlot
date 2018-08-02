@@ -2281,6 +2281,10 @@ class Task(BaseSweepIterator):
             self.args._append(n, Argument(n, d, unit, task=self))
         names, annovars = return_values(func)
         for name in names:
+            if name in self.args:
+                msg = 'return value {!r} is already an argument'
+                msg = msg.format(name)
+                raise ValueError(msg)
             unit = annovars.get(name, None)
             self.returns._append(name, ReturnValue(name, unit, self))
         for name, arg in self.args:
