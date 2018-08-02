@@ -2497,9 +2497,12 @@ class Task(BaseSweepIterator):
     @config
     def add_dependency(self, task, squeeze=[], auto_zip=True):
         self.args._configure_tasksweeps()
-        if not isinstance(squeeze, (list, tuple)):
-            squeeze = [squeeze]
-        sq_paths = [task.complete_path(path) for path in squeeze]
+        if squeeze == '*':
+            sq_paths = task.args._get_arg_paths()
+        else:
+            if not isinstance(squeeze, (list, tuple)):
+                squeeze = [squeeze]
+            sq_paths = [task.complete_path(path) for path in squeeze]
         tasksweep = TaskSweep(task, sq_paths)
         if task not in self.args._tasksweeps:
             self.args._tasksweeps[task] = tasksweep
