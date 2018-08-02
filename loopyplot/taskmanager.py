@@ -2453,7 +2453,7 @@ class Task(BaseSweepIterator):
         sweeps = self.args._nested.sweeps[:num]
         inner_pre = [s.idx for s in sweeps]
         nested = self.args._nested
-        if num != 0:
+        if num != 0 and len(self) > 1:
             line = 'run {!r} from'.format(self)
             line_len = len(line)
             nlen = str(len(nested))
@@ -2462,7 +2462,7 @@ class Task(BaseSweepIterator):
         else:
             line = 'run {!r}    {{}}/{}'
             line = line.format(self,    len(nested))
-        if self.is_finished():
+        if self.is_finished() and not nested._is_initialized:
             line = ''
         else:
             log.info(line.format(nested.idx_next + 1))
@@ -2485,7 +2485,7 @@ class Task(BaseSweepIterator):
                 self.next_value()
                 if plot_update:
                     self.plot_update()
-        if num != 0 and line:
+        if num != 0 and line and len(self) > 1:
             line = ' to'
             line = '.' * (line_len - len(line)) + line
             line += fmtstr.format(self.args._nested.idx + 1)
