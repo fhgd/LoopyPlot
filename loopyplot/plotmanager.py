@@ -948,6 +948,10 @@ class LineManager:
                 ydata = line_ydata[ln_idx]
                 cursor.set_marker('o')
                 cursor.set_linestyle('')
+            elif len(self.lines) == 1:
+                num = num - 1
+                lines.setdefault(line, []).append((None, None))
+                continue
             else:
                 xdata = line_xdata
                 ydata = line_ydata
