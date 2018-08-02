@@ -3,9 +3,12 @@ try:
 except ImportError:
     from distutils.core import setup
 
+
+exec(open('loopyplot/version.py').read())
+
 setup(
     name='loopyplot',
-    #~ version='0.0.1',
+    version=__version__,
     author='Friedrich Hagedorn',
     author_email='friedrich_h@gmx.de',
     url='https://github.com/fhgd/LoopyPlot',

@@ -43,3 +43,5 @@ from .plotmanager import log as log_pm
 from .utils import enable_logger
 enable_logger(log, 'info', 'short')
 enable_logger(log_pm, 'info', 'short')
+
+from .version import __version__
