@@ -7,6 +7,12 @@ from colorsys import rgb_to_hls, hls_to_rgb
 from collections import OrderedDict, Iterable
 from itertools import product
 
+try:
+    from IPython import get_ipython
+    ip = get_ipython()
+except ImportError:
+    ip = None
+
 from . import utils
 from . import taskmanager
 log = utils.get_plain_logger(__name__)
@@ -21,7 +27,8 @@ class PlotManager:
         self.xlim = {}      # view, row, col: (xmin, xmax)
         self.active = {}    # view: [loc, ...]
         self.windows = {}   # window: None or figure
-        self.xyparams = {}   # view, row, col: [params]
+        self.input_ln = {}  # fig: input_line_number
+        self.xyparams = {}  # view, row, col: [params]
 
         # used for caching
         self.lms = {}       # loc: task: config-idx: lm
@@ -430,6 +437,15 @@ class PlotManager:
 
         for loc in locs:
             tasks = set(view_tasks)
+
+            # notebook: close prior opend windows special
+            if self.is_notebook():
+                lineno = self.get_last_input_number()
+                fig = self.windows[loc[0]]
+                if lineno != self.input_ln[fig]:
+                    self.input_ln.pop(fig)
+                    plt.close(fig)
+
             if self.is_window_closed(loc[0]):
                 log.info('window {} was closed'.format(loc[0]))
                 self.windows[loc[0]] = None
@@ -594,13 +610,27 @@ class PlotManager:
     def _posxy(row, col, nrows, ncols):
         return row*ncols + col
 
+    def get_last_input_number(self):
+        if ip:
+            hm = ip.history_manager
+            session, lineno, cmdstr = next(hm._get_range_session(-1))
+            return lineno
+        else:
+            return 0
+
+    def is_notebook(self):
+        nb_backends = 'inline', 'notebook', 'nbAgg', 'ipympl'
+        backend = plt.matplotlib.get_backend()
+        if any(nbb in backend for nbb in nb_backends):
+            return True
+        else:
+            return False
+
     def open_window(self, window=0):
         fig = self.windows.get(window, None)
         if fig:
             return fig
-        nb_backends = 'inline', 'notebook', 'nbAgg', 'ipympl'
-        backend = plt.matplotlib.get_backend()
-        if any(nbb in backend for nbb in nb_backends):
+        if self.is_notebook():
             fig = plt.figure()
             label = self.get_window_label(window)
             fig.canvas.set_window_title(label)
@@ -614,6 +644,7 @@ class PlotManager:
                 fig.canvas.mpl_disconnect(id)
         fig.canvas.mpl_connect('pick_event', self.on_pick)
         self.windows[window] = fig
+        self.input_ln[fig] = self.get_last_input_number()
         return fig
 
     def is_window_open(self, window):
