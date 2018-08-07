@@ -1609,13 +1609,14 @@ class ArgumentParams(Parameters):
                 line += '\t({}/{}):\t{}'.format(sweep.idx + 1, len(sweep),
                                                 ptr_repr)
             elif isinstance(ptr, DependParamPointer):
+                #~ line += '  from: {!r}'.format(ptr._param)
                 line += '\n' + ' ' * maxlen
                 line += '   depends on: {!r}'.format(ptr._param)
-                tswp = ptr._tasksweep
-                for path in tswp.squeeze:
-                    path = ', '.join(str(param) for param in path)
-                    line += '\n' + ' ' * maxlen
-                    line += '     squeezed: {}'.format(path)
+                #~ tswp = ptr._tasksweep
+                #~ for path in tswp.squeeze:
+                    #~ path = ', '.join(str(param) for param in path)
+                    #~ line += '\n' + ' ' * maxlen
+                    #~ line += '     squeezed: {}'.format(path)
                 #~ for path, sweep in tswp.sweeps.items():
                     #~ path = list(path)
                     #~ msg = '\n        ({}/{}): {}'
@@ -1623,7 +1624,7 @@ class ArgumentParams(Parameters):
                     #~ line += msg
                 #~ line += '\n'
             lines.append(line)
-        return '\n'.join(lines)
+        return '\n\n'.join(lines)
 
     def zip(self, *items):
         if len(items) < 2:
