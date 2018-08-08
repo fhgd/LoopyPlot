@@ -2310,6 +2310,7 @@ class Task(BaseSweepIterator):
         return self.func(*args, **kwargs)
 
     def __len__(self):
+        self.args._configure()
         return self.args._nested.__len__()
 
     @property
@@ -2411,29 +2412,17 @@ class Task(BaseSweepIterator):
         _result = self._call()
         return _result
 
-    def out(self, index=None):
-        res = self.returns
-        if index is None:
-            return {n: p.value for n, p in res}
-        elif isinstance(index, (int, slice)):
-            return {n: p._cache[index] for n, p in res}
-        elif isinstance(index, (tuple, list)):
-            values = {}
-            for n, p in res:
-                values[n] = [p._results[idx] for idx in index]
-            return values
-        else:
-            raise ValueError('index must be either None, slice '
-                             'or tuple/list')
-
-    def __getitem__(self, idx):
-        return self.out(idx)
-
     def next_value(self):
         self.args._nested.next_value()
-        self.call()
         self.em.next()
         return self.value
+
+    def get_value(self, idx):
+        if idx != self.args._nested.idx:
+            _is_initialized = self.args._nested._is_initialized
+            self.args._nested.idx = idx
+            self.args._nested._is_initialized = _is_initialized
+        return self._call()
 
     def run(self, num=None, inner=False, plot_update=False):
         """run the loops of the task
