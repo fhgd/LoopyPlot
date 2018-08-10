@@ -2506,7 +2506,7 @@ class Task(BaseSweepIterator):
 
         # let self._pm pointing to task._pm
         self._pm = task._pm
-        self.pm.join_views(task, self)
+        #~ self.pm.join_views(task, self)
 
     @property
     def depend_tasks(self):
@@ -2717,6 +2717,9 @@ class Task(BaseSweepIterator):
             plevel = plotmanager.log.level
             plotmanager.log.setLevel('WARNING')
             pm = plotmanager.PlotManager()
+            if pm.is_notebook():
+                # remove view of current task
+                pm.disable(None)
             plotmanager.log.level = plevel
             self._pm.append(pm)
         return self._pm[0]

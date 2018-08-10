@@ -146,7 +146,7 @@ class PlotManager:
                         label = self.get_window_label(window)
                         log.info('close {}'.format(label))
                         plt.close(label)
-                        self.windows.pop(window)
+                self.windows.pop(window)
 
     def join_views(self, *tasks):
         if len(tasks) > 1:
@@ -217,8 +217,8 @@ class PlotManager:
             self.views[task] = self.new_view()
         view = self.views[task]
 
-        #~ if view not in self.active:
-            #~ self.enable(view)
+        if self.is_notebook() and view not in self.active:
+            self.enable(view)
 
         if isinstance(row, list):
             row = tuple(row)
@@ -442,7 +442,7 @@ class PlotManager:
             if self.is_notebook():
                 lineno = self.get_last_input_number()
                 fig = self.windows[loc[0]]
-                if lineno != self.input_ln[fig]:
+                if fig and lineno != self.input_ln[fig]:
                     self.input_ln.pop(fig)
                     plt.close(fig)
 
