@@ -1,10 +1,20 @@
+from subprocess import check_output
+
 try:
     from setuptools import setup
 except ImportError:
     from distutils.core import setup
 
 
-exec(open('loopyplot/version.py').read())
+__version__ = '0.0.1'
+try:
+    hg_id = check_output(['hg', 'id', '-i']).decode().strip('\n')
+    __version__ += '-{}'.format(hg_id.replace('+', '_modified'))
+except FileNotFoundError:
+    pass
+with open('loopyplot/version.py', 'w') as file:
+    file.write('__version__ = {!r}'.format(__version__))
+
 
 setup(
     name='loopyplot',
