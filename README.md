@@ -1,7 +1,8 @@
 LoopyPlot
 =========
 
-Plot data dependencies for scientific and engineering tasks in Python. With ...
+Visualize relations of experimental data series by means of interactive
+plots in Python. With ...
 
 > Loo **_py_** Plot ... you can describe your problem in a plain
 > [python](https://www.python.org) function
