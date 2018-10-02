@@ -1,7 +1,8 @@
 LoopyPlot
 =========
 
-Plot data dependencies for scientific and engineering tasks in Python. With ...
+Visualize relations of experimental data series by means of interactive
+plots in Python. With ...
 
 > Loo **_py_** Plot ... you can describe your problem in a plain
 > [python](https://www.python.org) function
@@ -164,8 +165,4 @@ If necessary this will automatically install the dependencies:
 Licence
 -------
 
-LoopyPlot is currently licenced under GPL 3. If this licence prevents you
-to either use or contribute to LoopyPlot then please feel free to
-contact me (find my email in setup.py).
-It is planed moving to MIT/BSD/Apache/... licence until I understand
-the differences :-)
+LoopyPlot is currently licenced under GPL 3.
