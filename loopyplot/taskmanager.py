@@ -2081,6 +2081,26 @@ class ReturnParams(Parameters):
             df.index.name = None
         return df
 
+    def to_csv(self, fname, xarg, *yparams):
+        task = self._task
+        xpath = [task.args[xarg]]
+        tswp = _PlotSweep(task, [xpath])
+        tswp.configure()
+        data = {}
+        for state in tswp:
+            _, __, cidx = state
+            cidxs = tswp.get_cidxs(*state)
+            if xarg not in data:
+                vals = task.get_value_from_path(xpath, cidxs)
+                data[xarg] = vals
+            for name in yparams:
+                ypath = [task.params[name]]
+                vals = task.get_value_from_path(ypath, cidxs)
+                data['{}_{}'.format(name, cidx)] = vals
+        df = pd.DataFrame(data)
+        df.to_csv(fname, index=False)
+        return df
+
 
 class Slice(object):
     def __init__(self, start=None, stop=None, step=None):
