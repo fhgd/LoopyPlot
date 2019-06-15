@@ -911,11 +911,11 @@ class SweepFactoryPointer:
 
     @property
     def min(self):
-        return self._sweep.min
+        return self.sweep.min
 
     @property
     def max(self):
-        return self._sweep.max
+        return self.sweep.max
 
 
 def config(func):
@@ -1101,6 +1101,7 @@ class Argument:
         use_factory = False
         for name, value in kwargs.items():
             if isinstance(value, (Argument, ReturnValue)):
+                factory.add_dependency(value._task)
                 factory.args[name].depends_on(value)
                 use_factory = True
             else:
@@ -1166,14 +1167,14 @@ class Argument:
         if self._task.args._last_tasksweep is None:
             msg = '{} is not a depending task'.format(task)
             log.error(msg)
-            msg = "try: {}.args.add_depending_task({}, squeeze='')"
+            msg = "try: {}.add_dependency({}, squeeze='')"
             msg = msg.format(self._task.name, task.name)
             log.info(msg)
             return
         elif task is not self._task.args._last_tasksweep.task:
             msg = '{} was not the last added depending task'.format(task)
             log.error(msg)
-            msg = "try: {}.args.add_depending_task({}, squeeze='')"
+            msg = "try: {}.add_dependency({}, squeeze='')"
             msg = msg.format(self._task.name, task.name)
             log.info(msg)
             return
