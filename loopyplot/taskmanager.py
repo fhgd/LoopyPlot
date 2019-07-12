@@ -2093,10 +2093,14 @@ class ReturnParams(Parameters):
             cidxs = tswp.get_cidxs(*state)
             if xarg not in data:
                 vals = task.get_value_from_path(xpath, cidxs)
+                if len(cidxs) == 1:
+                    vals = [vals]
                 data[xarg] = vals
             for name in yparams:
                 ypath = [task.params[name]]
                 vals = task.get_value_from_path(ypath, cidxs)
+                if len(cidxs) == 1:
+                    vals = [vals]
                 data['{}_{}'.format(name, cidx)] = vals
         df = pd.DataFrame(data)
         df.to_csv(fname, index=False)
