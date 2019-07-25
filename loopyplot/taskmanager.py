@@ -211,6 +211,45 @@ class Sweep(BaseSweepIterator):
             args=', '.join(args))
 
 
+class SweepLog(Sweep):
+    """Sweeps logarithmically from start to stop within num steps.
+
+    >>> SweepLog(1, 1000, num=4).as_list()
+    [1.0, 10.0, 100.0, 1000.0]
+
+    >>> SweepLog(1, 64, num=7, base=2).as_list()
+    [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0]
+    """
+    def __init__(self, start, stop, num, base=10):
+        log_start = np.log(start) / np.log(base)
+        log_stop = np.log(stop) / np.log(base)
+        super().__init__(log_start, log_stop, num=num)
+        self.base = base
+
+    def get_value(self, idx):
+        val = self.start + self.step * idx
+        return np.power(self.base, val)
+
+    @property
+    def min(self):
+        return min(np.power(self.base, [self.start, self.stop]))
+
+    @property
+    def max(self):
+        return max(np.power(self.base, [self.start, self.stop]))
+
+    def __repr__(self):
+        args = []
+        args.append(repr(self.base**self.start))
+        args.append(repr(self.base**self.stop))
+        args.append(f'num={self.num}')
+        if self.base != 10:
+            args.append(f'base={self.base}')
+        return "{classname}({args})".format(
+            classname=self.__class__.__name__,
+            args=', '.join(args))
+
+
 class Iterate(BaseSweepIterator):
     """Iterate over given sequence of elements.
 
@@ -1111,6 +1150,70 @@ class Argument:
             ptr = SweepFactoryPointer(factory)
         else:
             ptr = SweepPointer(Sweep(start, stop, step, num))
+        if concat:
+            self._ptrs.append(ptr)
+        else:
+            self._ptr = ptr
+
+        self._task.args._add_sweeped_arg(self)
+        if zip:
+            self._task.args.zip(self, zip)
+
+    @config
+    def sweep_log(self, start, stop, num, base=10, zip='', concat=False):
+        """Sweeps logarithmically from start to stop within num steps.
+
+        >>> @Task
+        ... def binary(x):
+        ...     y = 2**x + 1
+        ...     return y
+        >>> binary.args.x.sweep(1, 2)
+        >>> binary.run(0)
+
+        >>> @Task
+        ... def task(a):
+        ...     return
+        >>> task.args.a.sweep(1, 3, num=binary.returns.y)
+        >>> task.run()
+        >>> binary.run()
+        >>> binary.returns.as_table()
+           x   y
+        0  1   3
+        1  2   5
+        >>> task.args._configure()
+        >>> task.run()
+        >>> task.args.as_table()
+             a
+        0  1.0
+        1  2.0
+        2  3.0
+        3  1.0
+        4  1.5
+        5  2.0
+        6  2.5
+        7  3.0
+        """
+        @Task
+        def factory(start, stop, num, base=10):
+            sweep = SweepLog(start, stop, num, base)
+            return sweep
+        kwargs = dict(start=start,
+                      stop=stop,
+                      num=num,
+                      base=base)
+        use_factory = False
+        for name, value in kwargs.items():
+            if isinstance(value, (Argument, ReturnValue)):
+                factory.add_dependency(value._task)
+                factory.args[name].depends_on(value)
+                use_factory = True
+            else:
+                factory.args[name].value = value
+
+        if use_factory:
+            ptr = SweepFactoryPointer(factory)
+        else:
+            ptr = SweepPointer(SweepLog(start, stop, num, base))
         if concat:
             self._ptrs.append(ptr)
         else:
