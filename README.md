@@ -16,6 +16,8 @@ plots in Python. With ...
 > **_Loopy_** Plot ... you just configure what you want and everything
 > else is done in the background for you
 
+UPDATE: In the `new-backend` branch a new backend based on expression graphs is developed. This approach will lead to a cleaner code base and a easier and more flexible user interface.
+
 
 Motivation
 ----------
@@ -165,4 +167,4 @@ If necessary this will automatically install the dependencies:
 Licence
 -------
 
-LoopyPlot is currently licenced under GPL 3.
+LoopyPlot is licenced under GPL 3.
