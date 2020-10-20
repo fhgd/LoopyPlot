@@ -1,0 +1,109 @@
+DataManager
+===========
+
+* single source of numeric values (or any data objects)
+
+* must be saved permanently (and reloaded)
+    - as json or yaml file
+    - keys must be unique strings
+
+* should have no other (function) dependencies
+
+    io_var => ([times], [values])
+
+io_var object:
+    * knows his parent function
+    * is unique even if his (parent) function is used multiple times
+    * represents as 'task_name.io_var_name'
+      and 'task_name' defaults to func.__name__
+
+times:
+    * global iteration 'time' (counter, cycles)
+    * owned by testmanager
+
+* Inputs have either
+    - constant user inputs or
+    - pointers to other functions or values from data manager
+      (this dependencies are stored in expression graph)
+
+* Outputs are either
+    [OK] saved in data manager or
+    [no] given to the next function arguments directly
+
+
+Function Graph
+==============
+
+ToDo:
+    * Reuse one function with different arguments
+    * Backtracking should use pythons standard library (~3.9)
+
+
+Function Mapping:
+
+    funcs:  func => {arg => (pointer, args, kwargs)}
+
+
+pointer:
+    * pointer(*args, **kwargs) evaluates the desired arg-value
+    * func.io_var() which by itself uses dm.get(...) or other functions
+    * dm.get('func.io_var') which acts as a data-source (no deeper dependencies)
+
+
+Backtracking:
+
+    nested list func-dependencies:
+
+        f(a, b, c)  with a=..., b=g(...), c=h(...)
+
+        g(x, y)     with x=Q(...), y=R(...)
+
+        h()
+
+        f: [g: [Q, R], h]
+
+    resolve dependencies with the f-list in reversed order
+
+        h=h(), R=R(), Q=Q(), g=g(x=Q, y=R), f(a=..., b=g, c=h)
+
+
+TestManager
+===========
+
+on-enter state dependency of a test-function:
+
+    The dependency graph of the (virtual) DUT-states must be known in advance.
+    Each test-function should return the current DUT-state after the
+    test procedure is finished. Afterwards, the test-manager must
+    construct a path to the new state-on-enter condition of the next
+    test-function.
+
+
+
+
+Expression Graph  (9.2.2021)
+================
+
+* Nodes provide a (numerical) value (or data object)
+
+* The node value comes from either a function (evaluation)
+  or a state memory
+
+* Function nodes can have links to its argument dependencies
+
+* State nodes can have (one) link for state update
+  which is triggered 'manually'
+
+* Nodes should be the keys of the data manager
+
+    Function nodes:
+        * dm for interim results (short-term cache)
+        * long-term cache (reduce computational effort)
+        * log statistical results (experiments)
+
+    State nodes:
+        * with or w/o logging (ordenary variable)
+        * explicit or implicit state update
+            * explicit == via update link
+            * implicit == write to mutable object via function call
+
