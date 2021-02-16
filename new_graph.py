@@ -30,21 +30,38 @@ class DataManager:
 class Node:
     __count__ = 0
 
-    def __init__(self, func=None, name=''):
+    def __init__(self, tm, func=None, name=''):
+        self.tm = tm
         self.func = func
         self.name = name if func is None else func.__name__
         self.id = Node.__count__
         Node.__count__ += 1
         self.key = f'n{self.id}'
 
+    def get(self):
+        return self.tm.dm.read(self.key)
+
+    def set(self, value):
+        self.tm.dm.write(self.key, value)
+        return value
+
     def __repr__(self):
-        #~ return f'n{self.id}'
-        if self.func:
-            return f'n{self.id}_{self.func.__name__}'
-        elif self.name:
-            return f'n{self.id}_{self.name}'
-        else:
-            return f'n{self.id}'
+        return f'n{self.id}_{self.name}' if self.name else f'n{self.id}'
+
+
+class StateNode(Node):
+    def __init__(self, *args, **kwargs):
+        Node.__init__(self, *args, **kwargs)
+        self.next = self.tm._add_node()
+        self.next.key = self.key
+
+    def add_next(self, func, **kwargs):
+        if self not in kwargs.values():
+            kwargs[self.name] = self
+        self.next.name = f'{self.name}_next'
+        self.next.func = func
+        self.tm._add_kwargs(self.next, kwargs)
+        return self.next
 
 
 class TaskManager:
@@ -52,37 +69,7 @@ class TaskManager:
         self.g = nx.DiGraph()
         self.dm = DataManager()
         self.func = Container()
-
-    def add_state(self, name, init):
-        node = self._as_node(init)
-        node.name = name
-        return node
-
-    def add_state_update(self, state, update):
-        update.key = state.key
-
-    def add_func(self, func, **kwargs):
-        func_node = self._add_node(func)
-        self.func._add(func_node)
-        for name, obj in kwargs.items():
-            node = self._as_node(obj)
-            if not node.name:
-                node.name = f'{name}_{func.__name__}'
-            self.g.add_edge(node, func_node, arg=name)
-        return func_node
-
-    def _as_node(self, obj):
-        if hasattr(obj, 'id'):
-            return obj
-        else:
-            node = self._add_node()
-            self.dm.write(node.key, obj)
-            return node
-
-    def _add_node(self, func=None, name=''):
-        node = Node(func, name)
-        self.g.add_node(node)
-        return node
+        self.state = Container()
 
     def eval(self, node):
         dct = nx.shortest_path_length(self.g, target=node)
@@ -93,14 +80,44 @@ class TaskManager:
             kwargs = {}
             for edge in self.g.in_edges(n):
                 name = self.g.edges[edge]['arg']
-                kwargs[name] = self.dm.read(edge[0].key)
+                kwargs[name] = edge[0].get()
             retval = n.func(**kwargs)
-            self.dm.write(n.key, retval)
-        return self.dm.read(node.key)
+            n.set(retval)
+        return node.get()
 
-    def update_state(self, node):
-        value = self.eval(node.update)
-        self.dm.write(node.key, value)
+    def add_state(self, name, init):
+        node = StateNode(self)
+        node.name = name
+        node.set(init)
+        self.g.add_node(node)
+        self.state._add(node)
+        return node
+
+    def add_func(self, func, **kwargs):
+        func_node = self._add_node(func)
+        self.func._add(func_node)
+        self._add_kwargs(func_node, kwargs)
+        return func_node
+
+    def _add_kwargs(self, func_node, kwargs):
+        for name, obj in kwargs.items():
+            node = self._as_node(obj)
+            if not node.name:
+                node.name = f'{func_node.name}_arg_{name}'
+            self.g.add_edge(node, func_node, arg=name)
+
+    def _as_node(self, obj):
+        if hasattr(obj, 'id'):
+            return obj
+        else:
+            node = self._add_node()
+            node.set(obj)
+            return node
+
+    def _add_node(self, func=None, name=''):
+        node = Node(self, func, name)
+        self.g.add_node(node)
+        return node
 
 
 class Container:
@@ -112,9 +129,6 @@ class Container:
         setattr(self, name, node)
 
 
-def inc(idx):
-    return idx + 1
-
 def quad(x, gain=1, offs=0):
     return gain * x**2 + offs
 
@@ -124,25 +138,30 @@ def double(x):
 tm = TaskManager()
 
 idx = tm.add_state('idx', 0)
-tm.add_func(inc, idx=idx)
-tm.add_state_update(idx, tm.func.inc)
+idx.add_next(lambda x: x + 1, x=idx)
+#~ idx.add_next(lambda idx: idx + 1)
 
 """
-idx = tm.add_state('idx', 0)
-idx.next(inc, idx=idx)
-
-
 idx = tm.add_state('idx', init=0)
-@idx.next(idx=idx)
-def func(idx):
+
+@idx.add_next(x=idx)
+def func(x):
+    return x + 1
+
+
+@tm.new_state
+def idx(idx=0, x=other_node_func, y=123):
+    # use only kwargs if next_func should be configured completely
     return idx + 1
 
 
-idx = tm.add_state('idx', init=0)
-idx.next(lambda idx: idx + 1)
+@tm.new_func
+def myquad(x, y=idx, z=123, gain=Sweep(5)):
+    return x + y + z
 
+myquad.arg.x = tm.Sweep(5)
+myquad.arg.x.sweep(5)
 
-tm.eval(idx.next)
 """
 
 tm.add_func(double, x=idx)
@@ -150,7 +169,7 @@ tm.add_func(quad, x=2, gain=tm.func.double, offs=0)
 
 print(tm.eval(tm.func.quad))
 for n in range(4):
-    tm.eval(tm.func.inc)
+    tm.eval(idx.next)
     print(tm.eval(tm.func.quad))
 
 tm.dm._data
