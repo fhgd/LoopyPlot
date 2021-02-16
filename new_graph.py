@@ -33,21 +33,9 @@ class Node:
     def __init__(self, func=None, name=''):
         self.func = func
         self.name = name if func is None else func.__name__
-        self.update = None
         self.id = Node.__count__
         Node.__count__ += 1
-        self._key = ''
-
-    @property
-    def key(self):
-        if self._key:
-            return self._key
-        #~ elif self.func:
-            #~ return f'n{self.id}_{self.func.__name__}'
-        #~ elif self.name:
-            #~ return f'n{self.id}_{self.name}'
-        else:
-            return f'n{self.id}'
+        self.key = f'n{self.id}'
 
     def __repr__(self):
         #~ return f'n{self.id}'
@@ -59,27 +47,19 @@ class Node:
             return f'n{self.id}'
 
 
-class ExprGraph:
+class TaskManager:
     def __init__(self):
         self.g = nx.DiGraph()
         self.dm = DataManager()
         self.func = Container()
 
     def add_state(self, name, init):
-        n1 = self._add_node(name=name)
-        def func(x):
-            return x
-        func.__name__ = f'{name}_update'
-        n2 = self.add_func(func)
-        key = f'n{n1.id}_n{n2.id}_{name}'
-        n1._key = key
-        n2._key = key
-        self.dm.write(key, init)
-        n1.update = n2
-        return n1
+        node = self._as_node(init)
+        node.name = name
+        return node
 
     def add_state_update(self, state, update):
-        self.g.add_edge(update, state.update, arg='x')
+        update.key = state.key
 
     def add_func(self, func, **kwargs):
         func_node = self._add_node(func)
@@ -141,31 +121,28 @@ def quad(x, gain=1, offs=0):
 def double(x):
     return 2*x
 
-tm = ExprGraph()
+tm = TaskManager()
 
 idx = tm.add_state('idx', 0)
 tm.add_func(inc, idx=idx)
 tm.add_state_update(idx, tm.func.inc)
 
 """
-idx.update(inc, idx=idx)
-
-
 idx = tm.add_state('idx', 0)
-@idx.update(idx=idx)
-def inc(idx):
-    return idx + 1
+idx.next(inc, idx=idx)
 
 
-@tm.state('idx', init=0)
+idx = tm.add_state('idx', init=0)
+@idx.next(idx=idx)
 def func(idx):
     return idx + 1
 
 
-@tm.state
-def idx(idx=0):
-    return idx + 1
+idx = tm.add_state('idx', init=0)
+idx.next(lambda idx: idx + 1)
 
+
+tm.eval(idx.next)
 """
 
 tm.add_func(double, x=idx)
@@ -173,7 +150,7 @@ tm.add_func(quad, x=2, gain=tm.func.double, offs=0)
 
 print(tm.eval(tm.func.quad))
 for n in range(4):
-    tm.eval(tm.func.idx_update)
+    tm.eval(tm.func.inc)
     print(tm.eval(tm.func.quad))
 
 tm.dm._data
