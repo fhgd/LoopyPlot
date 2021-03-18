@@ -121,3 +121,92 @@ x = Sweep()
 #~ x()
 #~ x.next()
 
+
+
+"""
+8.3.2021
+
+@system
+class Sweep:
+    start = input()
+    stop  = input()
+    step  = input(1)
+    num   = input(None)
+
+    @state
+    def idx(idx):
+        return idx + 1
+
+    def value(idx, start, aux):
+        return start + aux.step * idx
+
+    def is_finished(value, stop):
+        return value >= stop
+
+    def is_running(idx, aux):
+        return idx < aux.num
+
+    def len(aux):
+        return aux.num
+
+    def len(num: aux):
+        return num
+
+    def len(num=tm.extract('aux')):
+        return num
+
+    @returns('num, step')
+    def aux(start, stop, step, num):
+        '''Returns: num, step'''
+        if num is None:
+            delta = stop - start
+            _step = abs(step) if delta > 0 else -abs(step)
+            _num = int(delta / _step) + 1
+        else:
+            div = num - 1
+            div = div if div > 1 else 1
+            _step = float(delta) / div
+            _num = num
+        return _num, _step
+        return SimpleNameSpace(num=_num, step=_step)
+        return dict(num=_num, step=_step)
+
+
+
+    def len(num: aux):
+    def len(num: aux[num]):
+    def len(num: aux.autoget):
+    def len(num: aux.aget):
+    def len(num: aux.partof):
+    def len(num: aux.acon):
+
+    def len(num: 'aux'):
+    def len(num: 'aux.num'):
+
+    def len(num=aux.num):
+    def len(num=autoget('aux')):
+    def len(num=partof('aux')):
+    def len(num=aget('aux', 'num')):
+
+    def len(num=autoconnect('aux', 'num')):
+
+    ### ===== ###
+
+    def len(num=acon('aux')):
+
+    ### ----- ###
+
+    def len(num=GET(aux)):
+    def len(num=elem(aux)):
+    def len(num=elem('aux')):
+
+
+Vorschlag:
+    kwargs nur für echte inputs, values sind ip-defaults, bei Konflikten
+    eine Warnung erzeugen.
+
+    Verkünpfungen zwischen Funktionen mittels annotations.
+    kwargs haben dann keinen Einfluss.
+
+
+"""
