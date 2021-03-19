@@ -5,6 +5,29 @@ import inspect
 from types import FunctionType, SimpleNamespace
 
 
+class _Nothing:
+    """
+    Sentinel class to indicate the lack of a value when ``None`` is ambiguous.
+
+    ``_Nothing`` is a singleton. There is only ever one of it.
+
+    from attr/_make.py
+    """
+
+    _singleton = None
+
+    def __new__(cls):
+        if _Nothing._singleton is None:
+            _Nothing._singleton = super(_Nothing, cls).__new__(cls)
+        return _Nothing._singleton
+
+    def __repr__(self):
+        return "NOTHING"
+
+
+NOTHING = _Nothing()
+
+
 class DataManager:
     def __init__(self):
         self._data = {}
@@ -33,13 +56,23 @@ class DataManager:
 class Node:
     __count__ = 0
 
-    def __init__(self, tm, func=None, name=''):
-        self.tm = tm
-        self.func = func
-        self.name = name if func is None else func.__name__
+    def __init__(self, name=''):
+        self.name = name
         self.id = Node.__count__
         Node.__count__ += 1
         self.key = f'n{self.id}'
+        self._tm = None
+
+    @property
+    def tm(self):
+        if self._tm is None:
+            msg = f'node {self!r} must registered to a tm instance'
+            raise ValueError(msg)
+        return self._tm
+
+    def register(self, tm):
+        tm.g.add_node(self)
+        self._tm = tm
 
     def __call__(self):
         return self.eval()
@@ -58,11 +91,32 @@ class Node:
         return f'n{self.id}_{self.name}' if self.name else f'n{self.id}'
 
 
+class ValueNode(Node):
+    def __init__(self, value=NOTHING, name=''):
+        Node.__init__(self, name)
+        self._value = value
+
+    def register(self, tm):
+        Node.register(self, tm)
+        self.set(self._value)
+
+
+class FuncNode(Node):
+    def __init__(self, func):
+        Node.__init__(self, func.__name__)
+        self.func = func
+
+
 class StateNode(Node):
-    def __init__(self, *args, **kwargs):
-        self._init = kwargs.pop('init', 0)
-        Node.__init__(self, *args, **kwargs)
-        self.next = self.tm._add_node()
+    def __init__(self, name, init=0):
+        Node.__init__(self, name)
+        self._init = init
+        self.next = FuncNode(lambda x: x)
+
+    def register(self, tm):
+        Node.register(self, tm)
+        tm.g.add_node(self.next)
+        self.next._tm = tm
         self.next.key = self.key
         self.reset()
 
@@ -99,7 +153,7 @@ class TaskManager:
         dct = nx.shortest_path_length(self.g, target=node)
         nodes = sorted(dct, key=dct.get, reverse=True)
         for n in nodes:
-            if n.func is None:
+            if not isinstance(n, FuncNode):
                 continue
             kwargs = {}
             for edge in self.g.in_edges(n):
@@ -110,17 +164,17 @@ class TaskManager:
         return node.get()
 
     def add_state(self, name, init):
-        node = StateNode(self, init=init)
-        node.name = name
-        self.g.add_node(node)
+        node = StateNode(name, init)
+        node.register(self)
         self.state._add(node)
         return node
 
     def add_func(self, func, **kwargs):
-        func_node = self._add_node(func)
-        self.func._add(func_node)
-        self._add_kwargs(func_node, kwargs)
-        return func_node
+        node = FuncNode(func)
+        node.register(self)
+        self.func._add(node)
+        self._add_kwargs(node, kwargs)
+        return node
 
     def _add_kwargs(self, func_node, kwargs):
         for name, obj in kwargs.items():
@@ -133,80 +187,15 @@ class TaskManager:
         if hasattr(obj, 'id'):
             return obj
         else:
-            node = self._add_node()
-            node.set(obj)
+            node = ValueNode(obj)
+            node.register(self)
             return node
 
-    def _add_node(self, func=None, name=''):
-        node = Node(self, func, name)
-        self.g.add_node(node)
-        return node
-
-    def sweep(self, start, stop, step=1, num=None, idx=0):
-        return Sweep(self, start, stop, step, num, idx)
-
-    def mystate(self, func=None, init=0):
-        def wrap(func):
-            name = func.__name__
-            state = self.add_state(name, init)
-            state.add_next(func, **{name: state})
-            return state
-        if func is None:
-            return wrap
-        else:
-            return wrap(func)
+    def sweep(self, start, stop, step=1, num=None):
+        return Sweep(start, stop, step, num).register(self)
 
 
 tm = TaskManager()
-
-
-class Sweep:
-    def __init__(self, tm, start, stop, step=1, num=None, idx=0):
-        self.value = tm.add_func(self.get_value,
-            idx=self.idx,
-            start=start,
-            stop=stop,
-            step=step,
-            num=num,
-        )
-        self.is_running = tm.add_func(self._is_running,
-            idx=self.idx,
-            start=start,
-            stop=stop,
-            step=step,
-            num=num,
-        )
-
-    @tm.mystate(init=0)
-    def idx(idx):
-        return idx + 1
-
-    @staticmethod
-    def get_value(idx, start, stop, step, num):
-        delta = stop - start
-        if num is None:
-            step = abs(step) if delta > 0 else -abs(step)
-        else:
-            div = num - 1
-            div = div if div > 1 else 1
-            step = float(delta) / div
-        return start + step * idx
-
-    @staticmethod
-    def _is_running(idx, start, stop, step, num):
-        if num is None:
-            delta = stop - start
-            step = abs(step) if delta > 0 else -abs(step)
-            num = int(delta / step) + 1
-        return 0 <= idx < num - 1
-
-    def __call__(self):
-        return self.value.eval()
-
-    def next(self):
-        return self.idx.next.eval()
-
-
 
 def quad(x, gain=1, offs=0):
     return gain * x**2 + offs
@@ -214,11 +203,10 @@ def quad(x, gain=1, offs=0):
 def double(x):
     return 2*x
 
-#~ tm = TaskManager()
-
 idx = tm.add_state('idx', 0)
 idx.add_next(lambda x: x + 1, x=idx)
 #~ idx.add_next(lambda idx: idx + 1)
+
 
 """
 idx = tm.add_state('idx', init=0)
@@ -254,10 +242,6 @@ for n in range(4):
 tm.dm._data
 
 
-s1 = Sweep(tm, 1, 5, 0.5)
-s2 = Sweep(tm, 10, 20, num=3)
-
-
 """
 @tm.new_func
 def sweep(start, stop, step=1, num=None, idx=0):
@@ -274,9 +258,28 @@ s.next
 s.is_running
 """
 
-def state(func):
-    func.__is_state__ = True
-    return func
+
+class InP:
+    cls_counter = 0
+
+    def __init__(self, default=NOTHING):
+        InP.cls_counter += 1
+        self._counter = InP.cls_counter
+        self._default = default
+        self._name = ''
+
+
+def state(func=None, init=0):
+    def wrap(func):
+        name = func.__name__
+        state = StateNode(name, init)
+        state.next = FuncNode(func)
+        state.next.name = f'{name}_next'
+        return state
+    if func is None:
+        return wrap
+    else:
+        return wrap(func)
 
 
 class BaseSweep:
@@ -286,39 +289,42 @@ class BaseSweep:
         self._nodes = {}
         self._tm = None
 
-    @staticmethod
-    def _identity(x):
-        return x
-
     def register(self, tm):
         self._tm = tm
         nodes = self._nodes = {}
         func_nodes = {}
+        inps = []
         for name, attr in self.__class__.__dict__.items():
-            if name.startswith('__'):
-                continue
-            elif isinstance(attr, FunctionType):
-                if attr.__name__.startswith('state_'):
-                    state_name = attr.__name__.replace('state_', '')
-                    node = tm.add_state(state_name, 0)
-                    node.add_next(attr)
-                    nodes[state_name] = node
-                    nodes[f'{state_name}__next'] = node.next
-                    func_nodes[state_name] = node
-                    func_nodes[f'{state_name}__next'] = node.next
-                else:
-                    node = tm._add_node(attr)
-                    nodes[name] = node
-                    func_nodes[name] = node
-            else:
-                node = tm.add_func(self._identity, x=attr)
-                node.name = f'arg_{name}'
+            if isinstance(attr, InP):
+                attr._name = name
+                inps.append(attr)
+            elif isinstance(attr, FuncNode):
+                node = attr
+                node.register(tm)
                 nodes[name] = node
-                #~ print(f'{name}: {attr!r}')
+                func_nodes[name] = node
+            elif isinstance(attr, StateNode):
+                node = attr
+                node.register(tm)
+                nodes[name] = node
+                func_nodes[f'{name}_next'] = node.next
+
+        inps = sorted(inps, key=lambda inp: inp._counter)
+        for idx, inp in enumerate(inps):
+            name = inp._name
+            try:
+                value = self._args[idx]
+            except IndexError:
+                value = self._kwargs.get(name, inp._default)
+            if value is NOTHING:
+                msg = f'provide value for input argument {name!r}'
+                raise ValueError(msg)
+            node = tm._as_node(value)
+            node.name = f'arg_{name}'
+            nodes[name] = node
+            setattr(self, name, node)
+
         for node in func_nodes.values():
-            if node.func is None:
-                continue
-            #~ print(f'check function {node.func.__name__!r}')
             params = inspect.signature(node.func).parameters
             for name, param in params.items():
                 if (param.kind is inspect.Parameter.VAR_POSITIONAL or
@@ -328,20 +334,19 @@ class BaseSweep:
                     print(f'param {name!r} is not in nodes')
                     continue
                 tm.g.add_edge(nodes[name], node, arg=name)
-        return nodes
+        return self
 
 
-class MySweep(BaseSweep):
-    #~ start: int
-    #~ stop: int
-    start = 1
-    stop = 3
-    step = 1
-    num = None
+class Sweep(BaseSweep):
+    start = InP()
+    stop  = InP()
+    num   = InP(None)
+    step  = InP(1)
 
+    @FuncNode
     def aux(start, stop, step, num):
+        delta = stop - start
         if num is None:
-            delta = stop - start
             _step = abs(step) if delta > 0 else -abs(step)
             _num = int(delta / _step) + 1
         else:
@@ -351,18 +356,19 @@ class MySweep(BaseSweep):
             _num = num
         return SimpleNamespace(num=_num, step=_step)
 
-    def state_idx(idx):
+    @state(init=2)
+    def idx(idx):
         return idx + 1
 
+    @FuncNode
     def value(idx, start, aux):
         return start + aux.step * idx
 
-    def is_running(idx, aux):
-        return 0 <= idx < aux.num - 1
+    def is_running(self):
+        return 0 <= self.idx() < self.aux().num - 1
 
-    def is_finished(is_running):
-        return not is_running
+    def is_finished(self):
+        return not self.is_running()
 
 
-s = MySweep()
-s.register(tm)
+s = Sweep(5, 20, num=idx).register(tm)
