@@ -269,13 +269,22 @@ class InP:
         self._name = ''
 
 
+class Function:
+    def __init__(self, func):
+        self._name = func.__name__
+        self._func = func
+
+
+class State:
+    def __init__(self, name, init, func):
+        self._name = name
+        self._init = init
+        self._func = func
+
+
 def state(func=None, init=0):
     def wrap(func):
-        name = func.__name__
-        state = StateNode(name, init)
-        state.next = FuncNode(func)
-        state.next.name = f'{name}_next'
-        return state
+        return State(func.__name__, init, func)
     if func is None:
         return wrap
     else:
@@ -290,27 +299,48 @@ class BaseSweep:
         self._tm = None
 
     def register(self, tm):
-        self._tm = tm
-        nodes = self._nodes = {}
-        func_nodes = {}
-        inps = []
+        cls = self.__class__
+        try:
+            cls._inputs
+        except AttributeError:
+            cls._inputs = []
+        try:
+            cls._functions
+        except AttributeError:
+            cls._functions = []
+        try:
+            cls._states
+        except AttributeError:
+            cls._states = []
+
+        _inputs = []
         for name, attr in self.__class__.__dict__.items():
             if isinstance(attr, InP):
+                _inputs.append(attr)
                 attr._name = name
-                inps.append(attr)
-            elif isinstance(attr, FuncNode):
-                node = attr
-                node.register(tm)
-                nodes[name] = node
-                func_nodes[name] = node
-            elif isinstance(attr, StateNode):
-                node = attr
-                node.register(tm)
-                nodes[name] = node
-                func_nodes[f'{name}_next'] = node.next
+                def node_getter(self, name=name):
+                    return self._nodes[name].eval()
+                setattr(cls, name, property(node_getter))
+            elif isinstance(attr, Function):
+                cls._functions.append(attr)
+                def node_getter(self, name=name):
+                    return self._nodes[name]
+                setattr(cls, name, property(node_getter))
+            elif isinstance(attr, State):
+                cls._states.append(attr)
+                def node_getter(self, name=name):
+                    return self._nodes[name]
+                setattr(cls, name, property(node_getter))
 
-        inps = sorted(inps, key=lambda inp: inp._counter)
-        for idx, inp in enumerate(inps):
+        for inp in sorted(_inputs, key=lambda inp: inp._counter):
+            cls._inputs.append(inp)
+
+        # init of instance with nodes
+        self._tm = tm
+        self._nodes = {}
+        _func_nodes = []
+
+        for idx, inp in enumerate(cls._inputs):
             name = inp._name
             try:
                 value = self._args[idx]
@@ -321,19 +351,33 @@ class BaseSweep:
                 raise ValueError(msg)
             node = tm._as_node(value)
             node.name = f'arg_{name}'
-            nodes[name] = node
-            setattr(self, name, node)
+            self._nodes[name] = node
 
-        for node in func_nodes.values():
+        for fn in cls._functions:
+            node = FuncNode(fn._func)
+            node.register(tm)
+            self._nodes[fn._name] = node
+            _func_nodes.append(node)
+
+        for state in cls._states:
+            name = state._name
+            node = StateNode(name, state._init)
+            node.next.func = state._func
+            node.next.name = f'{name}_next'
+            node.register(tm)
+            self._nodes[name] = node
+            _func_nodes.append(node.next)
+
+        for node in _func_nodes:
             params = inspect.signature(node.func).parameters
             for name, param in params.items():
                 if (param.kind is inspect.Parameter.VAR_POSITIONAL or
                     param.kind is inspect.Parameter.VAR_KEYWORD):
                     continue
-                if name not in nodes:
+                if name not in self._nodes:
                     print(f'param {name!r} is not in nodes')
                     continue
-                tm.g.add_edge(nodes[name], node, arg=name)
+                tm.g.add_edge(self._nodes[name], node, arg=name)
         return self
 
 
@@ -343,7 +387,7 @@ class Sweep(BaseSweep):
     num   = InP(None)
     step  = InP(1)
 
-    @FuncNode
+    @Function
     def aux(start, stop, step, num):
         delta = stop - start
         if num is None:
@@ -356,11 +400,11 @@ class Sweep(BaseSweep):
             _num = num
         return SimpleNamespace(num=_num, step=_step)
 
-    @state(init=2)
+    @state(init=0)
     def idx(idx):
         return idx + 1
 
-    @FuncNode
+    @Function
     def value(idx, start, aux):
         return start + aux.step * idx
 
@@ -372,3 +416,4 @@ class Sweep(BaseSweep):
 
 
 s = Sweep(5, 20, num=idx).register(tm)
+d = Sweep(0, 1, step=0.2).register(tm)
