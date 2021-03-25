@@ -111,25 +111,37 @@ class StateNode(Node):
     def __init__(self, name, init=0):
         Node.__init__(self, name)
         self._init = init
-        self.next = FuncNode(lambda x: x)
+        self._next = FuncNode(lambda x: x)
+        self._is_initialized = True
 
     def register(self, tm):
         Node.register(self, tm)
-        tm.g.add_node(self.next)
-        self.next._tm = tm
-        self.next.key = self.key
+        tm.g.add_node(self._next)
+        self._next._tm = tm
+        self._next.key = self.key
         self.reset()
 
+    def set_value(self, value):
+        self.set(value)
+        self._is_initialized = True
+
     def reset(self):
-        self.set(self._init)
+        self.set_value(self._init)
+
+    def next(self):
+        if self._is_initialized:
+            self._is_initialized = False
+            return self._next.get()
+        else:
+            return self._next.eval()
 
     def add_next(self, func, **kwargs):
         if self not in kwargs.values():
             kwargs[self.name] = self
-        self.next.name = f'{self.name}_next'
-        self.next.func = func
-        self.tm._add_kwargs(self.next, kwargs)
-        return self.next
+        self._next.name = f'{self.name}_next'
+        self._next.func = func
+        self.tm._add_kwargs(self._next, kwargs)
+        return self._next
 
 
 class Container:
@@ -236,7 +248,7 @@ tm.add_func(quad, x=2, gain=tm.func.double, offs=0)
 
 print(tm.eval(tm.func.quad))
 for n in range(4):
-    tm.eval(idx.next)
+    tm.eval(idx._next)
     print(tm.eval(tm.func.quad))
 
 tm.dm._data
@@ -291,12 +303,26 @@ def state(func=None, init=0):
         return wrap(func)
 
 
+class SysBase:
+    _inputs = []
+    _functins = []
+    _states = []
+
+
 class BaseSweep:
     def __init__(self, *args, **kwargs):
         self._args = args
         self._kwargs = kwargs
         self._nodes = {}
         self._tm = None
+
+    def __repr__(self):
+        clsname = self.__class__.__name__
+        args = [repr(value) for value in self._args]
+        for name, value in self._kwargs.items():
+            args.append(f'{name}={value!r}')
+        args = ', '.join(args)
+        return f'{clsname}({args})'
 
     def register(self, tm):
         cls = self.__class__
@@ -329,7 +355,7 @@ class BaseSweep:
             elif isinstance(attr, State):
                 cls._states.append(attr)
                 def node_getter(self, name=name):
-                    return self._nodes[name]
+                    return self._nodes[name].get()
                 setattr(cls, name, property(node_getter))
 
         for inp in sorted(_inputs, key=lambda inp: inp._counter):
@@ -362,11 +388,11 @@ class BaseSweep:
         for state in cls._states:
             name = state._name
             node = StateNode(name, state._init)
-            node.next.func = state._func
-            node.next.name = f'{name}_next'
+            node._next.func = state._func
+            node._next.name = f'{name}_next'
             node.register(tm)
             self._nodes[name] = node
-            _func_nodes.append(node.next)
+            _func_nodes.append(node._next)
 
         for node in _func_nodes:
             params = inspect.signature(node.func).parameters
@@ -379,6 +405,53 @@ class BaseSweep:
                     continue
                 tm.g.add_edge(self._nodes[name], node, arg=name)
         return self
+
+    def is_running(self):
+        return 0 <= self.idx < len(self) - 1
+
+    def is_finished(self):
+        return not self.is_running()
+
+    def reset(self):
+        nodes = self._nodes
+        for state in self._states:
+            nodes[state._name].reset()
+
+    def _next_state(self, name=''):
+        names = [name] if name else [s._name for s in self._states]
+        nodes = self._nodes
+        return tuple(nodes[name]._next.eval() for name in names)
+
+    def next(self):
+        if self.is_running():
+            if self._is_initialized:
+                self._is_initialized = False
+            else:
+                self._next_state()
+        else:
+            raise StopIteration
+        return self.value()
+
+    __next__ = next
+
+    def __iter__(self):
+        return self
+
+    def as_list(self):
+        self.reset()
+        return list(self)
+
+    @property
+    def _is_initialized(self):
+        names = [s._name for s in self._states]
+        nodes = self._nodes
+        return any(nodes[name]._is_initialized for name in names)
+
+    @_is_initialized.setter
+    def _is_initialized(self, value):
+        nodes = self._nodes
+        for s in self._states:
+            nodes[s._name]._is_initialized = value
 
 
 class Sweep(BaseSweep):
@@ -408,12 +481,111 @@ class Sweep(BaseSweep):
     def value(idx, start, aux):
         return start + aux.step * idx
 
+    def __len__(self):
+        return self.aux().num
+
+    @property
+    def min(self):
+        return min(self.start, self.stop)
+
+    @property
+    def max(self):
+        return max(self.start, self.stop)
+
+
+class Nested:
+    """Iterate over nested sweeps.
+
+    >>> s1 = Sweep(1, 2)
+    >>> s2 = Iterate(10, 20)
+    >>> n = Nested(s1, s2)
+    >>> n.as_list()
+    [(1, 10), (2, 10), (1, 20), (2, 20)]
+    """
+    def __init__(self, *sweeps):
+        self.sweeps = list(sweeps)
+        self._is_initialized = True
+
+    def __len__(self):
+        value = 1
+        for sweep in self.sweeps:
+            value *= len(sweep)
+        return value
+
+    def reset(self):
+        for sweep in self.sweeps:
+            sweep.reset()
+        self._is_initialized = True
+
+    def value(self):
+        return tuple(s.value() for s in self.sweeps)
+
     def is_running(self):
-        return 0 <= self.idx() < self.aux().num - 1
+        return any(s.is_running() for s in self.sweeps)
 
     def is_finished(self):
         return not self.is_running()
 
+    def _next_state(self):
+        sweeps = self.sweeps
+
+        n = 0
+        while sweeps[n].is_finished():
+            n += 1
+        sweeps[n]._next_state()
+
+        n -= len(sweeps)
+        while n > -len(sweeps):
+            n -= 1
+            sweep = sweeps[n]
+            if sweep.is_finished():
+                sweep.reset()
+            elif sweep._is_initialized:
+                print(f'is init: {sweep._is_initialized}')
+                sweep._next_state()
+        return self.value()
+
+    def next(self):
+        if self.is_running():
+            if self._is_initialized:
+                self._is_initialized = False
+            else:
+                self._next_state()
+        else:
+            raise StopIteration
+        return self.value()
+
+    __next__ = next
+
+    def __iter__(self):
+        return self
+
+    def as_list(self):
+        self.reset()
+        return list(self)
+
 
 s = Sweep(5, 20, num=idx).register(tm)
-d = Sweep(0, 1, step=0.2).register(tm)
+d = Sweep(1, 2).register(tm)
+g = Sweep(100, 200, num=2).register(tm)
+
+
+n = Nested(s, d, g)
+# n.as_list()
+
+"""
+
+def myfunc(a, b, c=123):
+    return a + b + c
+
+
+mytask = tm.add_func(myfunc, name='mytask', a=1, b=2)
+tm.tasks.mytask.arg.c = tm.Sweep(5)
+mytask.arg.c = tm.Sweep(5)
+
+tm.state.go_from('INIT', 'OFF', tm.tasks.mytask)
+tm.state.INIT.go_to('OFF', tm.tasks.mytast)
+
+
+
+"""
