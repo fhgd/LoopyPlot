@@ -112,7 +112,6 @@ class StateNode(Node):
         Node.__init__(self, name)
         self._init = init
         self._next = FuncNode(lambda x: x)
-        self._is_initialized = True
 
     def register(self, tm):
         Node.register(self, tm)
@@ -121,19 +120,11 @@ class StateNode(Node):
         self._next.key = self.key
         self.reset()
 
-    def set_value(self, value):
-        self.set(value)
-        self._is_initialized = True
-
     def reset(self):
-        self.set_value(self._init)
+        self.set(self._init)
 
     def next(self):
-        if self._is_initialized:
-            self._is_initialized = False
-            return self._next.get()
-        else:
-            return self._next.eval()
+        return self._next.eval()
 
     def add_next(self, func, **kwargs):
         if self not in kwargs.values():
@@ -209,15 +200,17 @@ class TaskManager:
 
 tm = TaskManager()
 
-def quad(x, gain=1, offs=0):
-    return gain * x**2 + offs
 
-def double(x):
-    return 2*x
+if 0:
+    def quad(x, gain=1, offs=0):
+        return gain * x**2 + offs
 
-idx = tm.add_state('idx', 0)
-idx.add_next(lambda x: x + 1, x=idx)
-#~ idx.add_next(lambda idx: idx + 1)
+    def double(x):
+        return 2*x
+
+    idx = tm.add_state('idx', 0)
+    idx.add_next(lambda x: x + 1, x=idx)
+    #~ idx.add_next(lambda idx: idx + 1)
 
 
 """
@@ -243,15 +236,16 @@ myquad.arg.x.sweep(5)
 
 """
 
-tm.add_func(double, x=idx)
-tm.add_func(quad, x=2, gain=tm.func.double, offs=0)
+if 0:
+    tm.add_func(double, x=idx)
+    tm.add_func(quad, x=2, gain=tm.func.double, offs=0)
 
-print(tm.eval(tm.func.quad))
-for n in range(4):
-    tm.eval(idx._next)
     print(tm.eval(tm.func.quad))
+    for n in range(4):
+        tm.eval(idx._next)
+        print(tm.eval(tm.func.quad))
 
-tm.dm._data
+    tm.dm._data
 
 
 """
@@ -407,7 +401,7 @@ class BaseSweep:
         return self
 
     def is_running(self):
-        return 0 <= self.idx < len(self) - 1
+        return 0 <= self.idx < len(self)
 
     def is_finished(self):
         return not self.is_running()
@@ -424,13 +418,11 @@ class BaseSweep:
 
     def next(self):
         if self.is_running():
-            if self._is_initialized:
-                self._is_initialized = False
-            else:
-                self._next_state()
+            value = self.value()
+            self._next_state()
         else:
             raise StopIteration
-        return self.value()
+        return value
 
     __next__ = next
 
@@ -440,18 +432,6 @@ class BaseSweep:
     def as_list(self):
         self.reset()
         return list(self)
-
-    @property
-    def _is_initialized(self):
-        names = [s._name for s in self._states]
-        nodes = self._nodes
-        return any(nodes[name]._is_initialized for name in names)
-
-    @_is_initialized.setter
-    def _is_initialized(self, value):
-        nodes = self._nodes
-        for s in self._states:
-            nodes[s._name]._is_initialized = value
 
 
 class Sweep(BaseSweep):
@@ -496,15 +476,14 @@ class Sweep(BaseSweep):
 class Nested:
     """Iterate over nested sweeps.
 
-    >>> s1 = Sweep(1, 2)
-    >>> s2 = Iterate(10, 20)
+    >>> s1 = Sweep(10, 20, step=10).register(tm)
+    >>> s2 = Sweep(1, 2, step=1).register(tm)
     >>> n = Nested(s1, s2)
     >>> n.as_list()
-    [(1, 10), (2, 10), (1, 20), (2, 20)]
+    [(10, 1), (10, 2), (20, 1), (20, 2)]
     """
     def __init__(self, *sweeps):
         self.sweeps = list(sweeps)
-        self._is_initialized = True
 
     def __len__(self):
         value = 1
@@ -515,45 +494,39 @@ class Nested:
     def reset(self):
         for sweep in self.sweeps:
             sweep.reset()
-        self._is_initialized = True
 
     def value(self):
         return tuple(s.value() for s in self.sweeps)
 
     def is_running(self):
-        return any(s.is_running() for s in self.sweeps)
+        return all(s.is_running() for s in self.sweeps)
 
     def is_finished(self):
         return not self.is_running()
 
     def _next_state(self):
         sweeps = self.sweeps
-
-        n = 0
-        while sweeps[n].is_finished():
-            n += 1
-        sweeps[n]._next_state()
-
-        n -= len(sweeps)
-        while n > -len(sweeps):
-            n -= 1
+        n = len(sweeps) - 1
+        while n >= 0:
             sweep = sweeps[n]
+            sweep._next_state()
+            if sweep.is_finished() and n > 0:
+                #~ sweep.reset()
+                n -= 1
+            else:
+                break
+        for sweep in self.sweeps[n+1:]:
             if sweep.is_finished():
                 sweep.reset()
-            elif sweep._is_initialized:
-                print(f'is init: {sweep._is_initialized}')
-                sweep._next_state()
-        return self.value()
+        return [s.idx for s in sweeps]
 
     def next(self):
         if self.is_running():
-            if self._is_initialized:
-                self._is_initialized = False
-            else:
-                self._next_state()
+            value = self.value()
+            self._next_state()
         else:
             raise StopIteration
-        return self.value()
+        return value
 
     __next__ = next
 
@@ -565,12 +538,12 @@ class Nested:
         return list(self)
 
 
-s = Sweep(5, 20, num=idx).register(tm)
-d = Sweep(1, 2).register(tm)
 g = Sweep(100, 200, num=2).register(tm)
+d = Sweep(1, 2).register(tm)
+s = Sweep(5, 15, num=3).register(tm)
 
 
-n = Nested(s, d, g)
+n = Nested(g, d, s)
 # n.as_list()
 
 """
