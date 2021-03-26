@@ -79,7 +79,10 @@ class Node:
         self._tm = tm
 
     def __call__(self):
-        return self.eval()
+        if self._new_inputs():
+            return self.eval()
+        else:
+            return self.get()
 
     def eval(self):
         return self.tm.eval(self)
@@ -353,7 +356,7 @@ class BaseSweep:
                 _inputs.append(attr)
                 attr._name = name
                 def node_getter(self, name=name):
-                    return self._nodes[name].eval()
+                    return self._nodes[name].__call__()
                 setattr(cls, name, property(node_getter))
             elif isinstance(attr, Function):
                 cls._functions.append(attr)
