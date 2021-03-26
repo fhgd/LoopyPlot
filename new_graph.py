@@ -45,6 +45,10 @@ class DataManager:
         # todo:  avoid bisect_right() - 1 = -1
         return values[idx_left]
 
+    def _last_idx(self, name):
+        idxs, _ = self._data.get(name, ([0], None))
+        return idxs[-1]
+
     def to_yaml(self, fname=''):
         pass
 
@@ -89,6 +93,16 @@ class Node:
 
     def __repr__(self):
         return f'n{self.id}_{self.name}' if self.name else f'n{self.id}'
+
+    def _inputs(self):
+        g = self.tm.g
+        nodes = nx.shortest_path_length(g, target=self)
+        return [n for n, d in g.in_degree(nodes) if d == 0]
+
+    def _new_inputs(self):
+        dm = self.tm.dm
+        idx = dm._last_idx(self.key)
+        return [ip for ip in self._inputs() if dm._last_idx(ip.key) > idx]
 
 
 class ValueNode(Node):
@@ -401,7 +415,7 @@ class BaseSweep:
         return self
 
     def is_running(self):
-        return 0 <= self.idx < len(self)
+        return 0 <= self.idx < len(self) - 1
 
     def is_finished(self):
         return not self.is_running()
@@ -417,12 +431,13 @@ class BaseSweep:
         return tuple(nodes[name]._next.eval() for name in names)
 
     def next(self):
-        if self.is_running():
-            value = self.value()
-            self._next_state()
-        else:
-            raise StopIteration
-        return value
+        new_inputs = self._nodes['value']._new_inputs()
+        if not new_inputs:
+            if self.is_running():
+                self._next_state()
+            else:
+                raise StopIteration
+        return self.value()
 
     __next__ = next
 
@@ -499,34 +514,33 @@ class Nested:
         return tuple(s.value() for s in self.sweeps)
 
     def is_running(self):
-        return all(s.is_running() for s in self.sweeps)
+        return any(s.is_running() for s in self.sweeps)
 
     def is_finished(self):
         return not self.is_running()
 
     def _next_state(self):
-        sweeps = self.sweeps
-        n = len(sweeps) - 1
-        while n >= 0:
-            sweep = sweeps[n]
-            sweep._next_state()
-            if sweep.is_finished() and n > 0:
-                #~ sweep.reset()
-                n -= 1
-            else:
+        sweeps = []
+        for sweep in reversed(self.sweeps):
+            if sweep.is_running():
+                sweep._next_state()
                 break
-        for sweep in self.sweeps[n+1:]:
-            if sweep.is_finished():
-                sweep.reset()
-        return [s.idx for s in sweeps]
+            else:
+                sweeps.append(sweep)
+        for sweep in sweeps:
+            sweep.reset()
+        return [s.idx for s in self.sweeps]
 
     def next(self):
-        if self.is_running():
-            value = self.value()
-            self._next_state()
-        else:
-            raise StopIteration
-        return value
+        new_inputs = []
+        for sweep in self.sweeps:
+            new_inputs += sweep._nodes['value']._new_inputs()
+        if not new_inputs:
+            if self.is_running():
+                self._next_state()
+            else:
+                raise StopIteration
+        return self.value()
 
     __next__ = next
 
