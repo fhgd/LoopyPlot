@@ -100,12 +100,17 @@ class Node:
     def _inputs(self):
         g = self.tm.g
         nodes = nx.shortest_path_length(g, target=self)
-        return [n for n, d in g.in_degree(nodes) if d == 0]
+        #~ nodes = nx.single_source_shortest_path_length(g.reverse(copy=False), self)
+        return {n: nodes[n] for n, d in g.in_degree(nodes) if d == 0}
 
     def _new_inputs(self):
         dm = self.tm.dm
         idx = dm._last_idx(self.key)
-        return [ip for ip in self._inputs() if dm._last_idx(ip.key) > idx]
+        inps = {}
+        for n, d in self._inputs().items():
+            if dm._last_idx(n.key) > idx:
+                inps[n] = d
+        return inps
 
 
 class ValueNode(Node):
@@ -141,6 +146,7 @@ class StateNode(Node):
         self.set(self._init)
 
     def next(self):
+        return self.tm.eval(self._next, lazy=False)
         return self._next.eval()
 
     def add_next(self, func, **kwargs):
@@ -169,17 +175,26 @@ class TaskManager:
         self.func = Container()
         self.state = Container()
 
-    def eval(self, node):
+    def eval(self, node, lazy=True):
         dct = nx.shortest_path_length(self.g, target=node)
         nodes = sorted(dct, key=dct.get, reverse=True)
+        _g = self.g.reverse(copy=False)
+        nodes = nx.algorithms.dfs_postorder_nodes(_g, node)
+        new_nodes = set(node._new_inputs())
+        print(f'new: {new_nodes}')
         for n in nodes:
             if not isinstance(n, FuncNode):
+                continue
+            arg_nodes = {a for a, b in self.g.in_edges(n)}
+            print(f'args of {n}: {arg_nodes}')
+            if lazy and not arg_nodes.intersection(new_nodes):
                 continue
             kwargs = {}
             for edge in self.g.in_edges(n):
                 name = self.g.edges[edge]['arg']
                 kwargs[name] = edge[0].get()
             retval = n.func(**kwargs)
+            new_nodes.add(n)
             n.set(retval)
         return node.get()
 
@@ -431,7 +446,7 @@ class BaseSweep:
     def _next_state(self, name=''):
         names = [name] if name else [s._name for s in self._states]
         nodes = self._nodes
-        return tuple(nodes[name]._next.eval() for name in names)
+        return tuple(nodes[name].next() for name in names)
 
     def next(self):
         new_inputs = self._nodes['value']._new_inputs()
@@ -555,14 +570,23 @@ class Nested:
         return list(self)
 
 
-g = Sweep(100, 200, num=2).register(tm)
-d = Sweep(1, 2).register(tm)
-s = Sweep(5, 15, num=3).register(tm)
+if 0:
+    g = Sweep(100, 200, num=2).register(tm)
+    d = Sweep(2, 2).register(tm)
+    s = Sweep(5, 15, num=3).register(tm)
 
 
-n = Nested(g, d, s)
-# n.as_list()
+    n = Nested(g, d, s)
+    # n.as_list()
 
+if 1:
+    g = Sweep(100, 200, num=2).register(tm)
+    d = Sweep(2, 5).register(tm)
+    s = Sweep(0, 10, num=d.value).register(tm)
+
+
+    n = Nested(g, d, s)
+    # n.as_list()
 """
 
 def myfunc(a, b, c=123):
