@@ -79,10 +79,7 @@ class Node:
         self._tm = tm
 
     def __call__(self):
-        if self._new_inputs():
-            return self.eval()
-        else:
-            return self.get()
+        return self.eval()
 
     def eval(self):
         return self.tm.eval(self)
@@ -112,6 +109,9 @@ class Node:
                 inps[n] = d
         return inps
 
+    def _is_new(self, idx):
+        return idx == 0 or tm.dm._last_idx(self.key) > idx
+
 
 class ValueNode(Node):
     def __init__(self, value=NOTHING, name=''):
@@ -127,6 +127,15 @@ class FuncNode(Node):
     def __init__(self, func):
         Node.__init__(self, func.__name__)
         self.func = func
+
+    def has_new_args(self):
+        tm = self.tm
+        idx = tm.dm._last_idx(self.key)
+        args = set()
+        for arg_node, _ in tm.g.in_edges(self):
+            if idx == 0 or tm.dm._last_idx(arg_node.key) > idx:
+                args.add(arg_node)
+        return args
 
 
 class StateNode(Node):
@@ -176,25 +185,19 @@ class TaskManager:
         self.state = Container()
 
     def eval(self, node, lazy=True):
-        dct = nx.shortest_path_length(self.g, target=node)
-        nodes = sorted(dct, key=dct.get, reverse=True)
         _g = self.g.reverse(copy=False)
         nodes = nx.algorithms.dfs_postorder_nodes(_g, node)
-        new_nodes = set(node._new_inputs())
-        print(f'new: {new_nodes}')
         for n in nodes:
             if not isinstance(n, FuncNode):
                 continue
-            arg_nodes = {a for a, b in self.g.in_edges(n)}
-            print(f'args of {n}: {arg_nodes}')
-            if lazy and not arg_nodes.intersection(new_nodes):
+            if lazy and not n.has_new_args():
                 continue
             kwargs = {}
             for edge in self.g.in_edges(n):
                 name = self.g.edges[edge]['arg']
-                kwargs[name] = edge[0].get()
+                arg_node, _ = edge
+                kwargs[name] = arg_node.get()
             retval = n.func(**kwargs)
-            new_nodes.add(n)
             n.set(retval)
         return node.get()
 
