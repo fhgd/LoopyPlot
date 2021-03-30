@@ -127,6 +127,7 @@ class FuncNode(Node):
     def __init__(self, func):
         Node.__init__(self, func.__name__)
         self.func = func
+        self.sweep = Nested()
 
     def has_new_args(self):
         tm = self.tm
@@ -136,6 +137,9 @@ class FuncNode(Node):
             if idx == 0 or tm.dm._last_idx(arg_node.key) > idx:
                 args.add(arg_node)
         return args
+
+    def run(self):
+        return self.tm.run(self)
 
 
 class StateNode(Node):
@@ -200,6 +204,14 @@ class TaskManager:
             retval = n.func(**kwargs)
             n.set(retval)
         return node.get()
+
+    def run(self, fn):
+        while 1:
+            self.eval(fn)
+            if fn.sweep.is_running():
+                fn.sweep._next_state()
+            else:
+                break
 
     def add_state(self, name, init):
         node = StateNode(name, init)
@@ -576,7 +588,7 @@ if 0:
     n = Nested(g, d, s)
     # n.as_list()
 
-if 1:
+if 0:
     g = Sweep(100, 200, num=2).register(tm)
     d = Sweep(2, 5).register(tm)
     s = Sweep(0, 10, num=d.value).register(tm)
@@ -584,6 +596,23 @@ if 1:
 
     n = Nested(g, d, s)
     # n.as_list()
+
+if 1:
+
+    def myfunc(x, gain, offs=0):
+        print(f'gain = {gain}')
+        print(f'   x = {x}')
+        print(f'offs = {offs}')
+        print()
+        return gain*x + offs
+
+    x = Sweep(10, 20, num=3).register(tm)
+    g = Sweep(1, 100, num=2).register(tm)
+
+    tm.add_func(myfunc, x=x.value, gain=g.value)
+
+    tm.func.myfunc.sweep = Nested(g, x)
+
 """
 
 def myfunc(a, b, c=123):
