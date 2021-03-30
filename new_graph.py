@@ -438,9 +438,6 @@ class BaseSweep:
     def is_running(self):
         return 0 <= self.idx < len(self) - 1
 
-    def is_finished(self):
-        return not self.is_running()
-
     def reset(self):
         nodes = self._nodes
         for state in self._states:
@@ -536,9 +533,6 @@ class Nested:
 
     def is_running(self):
         return any(s.is_running() for s in self.sweeps)
-
-    def is_finished(self):
-        return not self.is_running()
 
     def _next_state(self):
         sweeps = []
