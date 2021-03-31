@@ -518,6 +518,21 @@ class Sweep(BaseSweep):
         return max(self.start, self.stop)
 
 
+class Sequence(BaseSweep):
+    items = InP()
+
+    @state(init=0)
+    def idx(idx):
+        return idx + 1
+
+    @Function
+    def value(idx, items):
+        return items[idx]
+
+    def __len__(self):
+        return len(self.items)
+
+
 class Nested:
     """Iterate over nested sweeps.
 
@@ -607,7 +622,7 @@ if 1:
         return gain*x + offs
 
     x = Sweep(10, 20, num=3).register(tm)
-    g = Sweep(1, 100, num=2).register(tm)
+    g = Sequence([0.1, 10]).register(tm)
 
     tm.add_func(myfunc, x=x.value, gain=g.value)
 
