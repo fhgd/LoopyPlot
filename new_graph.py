@@ -1,5 +1,6 @@
 import bisect
 import networkx as nx
+import pandas as pd
 
 import inspect
 from types import FunctionType, SimpleNamespace
@@ -48,6 +49,10 @@ class DataManager:
     def _last_idx(self, name):
         idxs, _ = self._data.get(name, ([0], None))
         return idxs[-1]
+
+    def values(self, keys):
+        idxs, _ = self._data[keys[-1]]
+        return [[self.read(key, idx) for key in keys] for idx in idxs]
 
     def to_yaml(self, fname=''):
         pass
@@ -139,7 +144,22 @@ class FuncNode(Node):
         return args
 
     def run(self):
-        return self.tm.run(self)
+        self.tm.run(self)
+        return self.table
+
+    @property
+    def table(self):
+        names = []
+        nodes = []
+        for edge in self.tm.g.in_edges(self):
+            names.append(self.tm.g.edges[edge]['arg'])
+            nodes.append(edge[0])
+        names.append(self.name)
+        nodes.append(self)
+        keys = [n.key for n in nodes]
+        df = pd.DataFrame(self.tm.dm.values(keys))
+        df.columns = names
+        return df
 
 
 class StateNode(Node):
@@ -621,10 +641,10 @@ if 1:
         print()
         return gain*x + offs
 
-    x = Sweep(10, 20, num=3).register(tm)
-    g = Sequence([0.1, 10]).register(tm)
+    x = Sweep(10, 20, step=5).register(tm)
+    g = Sequence([1, 10]).register(tm)
 
-    tm.add_func(myfunc, x=x.value, gain=g.value)
+    tm.add_func(myfunc, x=x.value, gain=g.value, offs=0)
 
     tm.func.myfunc.sweep = Nested(g, x)
 
