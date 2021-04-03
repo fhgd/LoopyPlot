@@ -614,6 +614,56 @@ class Nested:
         return list(self)
 
 
+class Zip:
+    """Zip several sweeps together
+
+    >>> s1 = Sweep(1, 3)
+    >>> s2 = Iterate(10, 20, 30)
+    >>> Zip(s1, s2).as_list()
+    [(1, 10), (2, 20), (3, 30)]
+    """
+    def __init__(self, *sweeps):
+        self.sweeps = list(sweeps)
+
+    def __len__(self):
+        return min(len(sweep) for sweep in self.sweeps)
+
+    def reset(self):
+        for sweep in self.sweeps:
+            sweep.reset()
+
+    def value(self):
+        return tuple(s.value() for s in self.sweeps)
+
+    def is_running(self):
+        return all(s.is_running() for s in self.sweeps)
+
+    def _next_state(self):
+        for sweep in self.sweeps:
+            sweep._next_state()
+        return [s.idx for s in self.sweeps]
+
+    def next(self):
+        new_inputs = []
+        for sweep in self.sweeps:
+            new_inputs += sweep._nodes['value']._new_inputs()
+        if not new_inputs:
+            if self.is_running():
+                self._next_state()
+            else:
+                raise StopIteration
+        return self.value()
+
+    __next__ = next
+
+    def __iter__(self):
+        return self
+
+    def as_list(self):
+        self.reset()
+        return list(self)
+
+
 if 0:
     g = Sweep(100, 200, num=2).register(tm)
     d = Sweep(2, 2).register(tm)
@@ -647,6 +697,8 @@ if 1:
     tm.add_func(myfunc, x=x.value, gain=g.value, offs=0)
 
     tm.func.myfunc.sweep = Nested(g, x)
+
+    z = Zip(x, g)
 
 """
 
