@@ -2,6 +2,7 @@ DataManager
 ===========
 
 * single source of numeric values (or any data objects)
+    => dm == 'object storage'
 
 * must be saved permanently (and reloaded)
     - as json or yaml file
