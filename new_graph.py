@@ -34,10 +34,14 @@ class DataManager:
         self._data = {}
         self._idx = 0  # == max(of all ixds) + 1
 
-    def write(self, name, value, idx=0):
+    def write(self, name, value, overwrite=False):
         idxs, values = self._data.setdefault(name, ([], []))
-        idxs.append(self._idx)
-        values.append(value)
+        if overwrite:
+            idxs[-1:] = [self._idx]
+            values[-1:] = [value]
+        else:
+            idxs.append(self._idx)
+            values.append(value)
         self._idx += 1
 
     def read(self, name, idx=-1):
