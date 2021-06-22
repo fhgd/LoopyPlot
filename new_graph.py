@@ -69,8 +69,10 @@ class DataManager:
 class Node:
     __count__ = 0
 
-    def __init__(self, name=''):
+    def __init__(self, name='', overwrite=False, lazy=True):
         self.name = name
+        self.overwrite = overwrite
+        self.lazy = lazy
         self.id = Node.__count__
         Node.__count__ += 1
         self.key = f'n{self.id}'
@@ -97,7 +99,7 @@ class Node:
         return self.tm.dm.read(self.key)
 
     def set(self, value):
-        self.tm.dm.write(self.key, value)
+        self.tm.dm.write(self.key, value, self.overwrite)
         return value
 
     def __repr__(self):
@@ -121,6 +123,9 @@ class Node:
     def _is_new(self, idx):
         return idx == 0 or tm.dm._last_idx(self.key) > idx
 
+    def _has_results(self):
+        return self.key in self.tm.dm._data
+
 
 class ValueNode(Node):
     def __init__(self, value=NOTHING, name=''):
@@ -133,8 +138,8 @@ class ValueNode(Node):
 
 
 class FuncNode(Node):
-    def __init__(self, func):
-        Node.__init__(self, func.__name__)
+    def __init__(self, func, overwrite=False, lazy=True):
+        Node.__init__(self, func.__name__, overwrite, lazy)
         self.func = func
         self.sweep = Nested()
 
@@ -170,7 +175,7 @@ class StateNode(Node):
     def __init__(self, name, init=0):
         Node.__init__(self, name)
         self._init = init
-        self._next = FuncNode(lambda x: x)
+        self._next = FuncNode(lambda x: x, lazy=False)
 
     def register(self, tm):
         Node.register(self, tm)
@@ -183,7 +188,6 @@ class StateNode(Node):
         self.set(self._init)
 
     def next(self):
-        return self.tm.eval(self._next, lazy=False)
         return self._next.eval()
 
     def add_next(self, func, **kwargs):
@@ -212,13 +216,13 @@ class TaskManager:
         self.func = Container()
         self.state = Container()
 
-    def eval(self, node, lazy=True):
+    def eval(self, node, lazy=None):
         _g = self.g.reverse(copy=False)
         nodes = nx.algorithms.dfs_postorder_nodes(_g, node)
         for n in nodes:
             if not isinstance(n, FuncNode):
                 continue
-            if lazy and not n.has_new_args():
+            if n.lazy and n._has_results() and not n.has_new_args():
                 continue
             kwargs = {}
             for edge in self.g.in_edges(n):
