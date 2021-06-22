@@ -682,7 +682,7 @@ if 0:
     n = Nested(g, d, s)
     # n.as_list()
 
-if 1:
+if 0:
 
     def myfunc(x, gain, offs=0):
         print(f'gain = {gain}')
@@ -716,3 +716,59 @@ tm.state.INIT.go_to('OFF', tm.tasks.mytast)
 
 
 """
+
+
+### Use mutable data types for inplace state transitions whithout logging ###
+
+
+if 0:
+    def value(start, step, idx):
+        idx[0] += 1
+        return start + idx[0] * step
+
+    tm.add_func(value, start=100, step=11, idx=[0])
+
+
+if 1:
+    # todo: idx node should have a flag for mutable datatype
+    idx = ValueNode([0], name='idx')
+
+    def value(start, step, idx):
+        idx[0] += 1
+        return start + idx[0] * step
+    tm.add_func(value, start=100, step=11, idx=idx)
+    tm.func.value.overwrite = True
+    tm.func.value.lazy = False
+
+    tm.func.value.eval()
+    tm.func.value.eval()
+    tm.func.value.eval()
+
+    df = tm.func.value.table
+    # start  step  idx  value
+    # 0    100    11  [3]    133
+
+
+if 0:
+    @tm.add_func
+    def new_idx():
+        return [0]
+
+    def value(start, step, idx):
+        idx[0] += 1
+        return start + idx[0] * step
+
+    tm.add_func(value, start=100, step=11, idx=new_idx)
+    #~ tm.func.value.overwrite = True
+    tm.func.value.lazy = False
+
+    tm.func.value.eval()
+    tm.func.value.eval()
+    tm.func.value.eval()
+
+    df = tm.func.value.table
+    # start  step  idx  value
+    # 0    100    11  [3]    111
+    # 1    100    11  [3]    122
+    # 2    100    11  [3]    133
+
