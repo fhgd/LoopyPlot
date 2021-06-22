@@ -254,12 +254,9 @@ class TaskManager:
             self.g.add_edge(node, func_node, arg=name)
 
     def _as_node(self, obj):
-        if hasattr(obj, 'id'):
-            return obj
-        else:
-            node = ValueNode(obj)
-            node.register(self)
-            return node
+        node = obj if hasattr(obj, 'id') else ValueNode(obj)
+        node.register(self)
+        return node
 
     def sweep(self, start, stop, step=1, num=None):
         return Sweep(start, stop, step, num).register(self)
