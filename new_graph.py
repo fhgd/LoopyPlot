@@ -88,6 +88,7 @@ class Node:
     def register(self, tm):
         tm.g.add_node(self)
         self._tm = tm
+        return self
 
     def __call__(self):
         return self.eval()
@@ -135,7 +136,7 @@ class ValueNode(Node):
     def register(self, tm):
         Node.register(self, tm)
         self.set(self._value)
-
+        return self
 
 class FuncNode(Node):
     def __init__(self, func, overwrite=False, lazy=True):
@@ -183,6 +184,7 @@ class StateNode(Node):
         self._next._tm = tm
         self._next.key = self.key
         self.reset()
+        return self
 
     def reset(self):
         self.set(self._init)
@@ -262,8 +264,10 @@ class TaskManager:
             self.g.add_edge(node, func_node, arg=name)
 
     def _as_node(self, obj):
-        node = obj if hasattr(obj, 'id') else ValueNode(obj)
-        node.register(self)
+        try:
+            node = obj.register(self)
+        except AttributeError:
+            node = ValueNode(obj).register(self)
         return node
 
     def sweep(self, start, stop, step=1, num=None):
