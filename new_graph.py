@@ -70,6 +70,7 @@ class Node:
     __count__ = 0
 
     def __init__(self, name='', overwrite=False, lazy=True):
+        # todo: underscore all attributes
         self.name = name
         self.overwrite = overwrite
         self.lazy = lazy
@@ -95,6 +96,8 @@ class Node:
 
     def eval(self):
         return self.tm.eval(self)
+
+    #todo: add empty __eval__()
 
     def get(self):
         return self.tm.dm.read(self.key)
@@ -143,6 +146,22 @@ class FuncNode(Node):
         Node.__init__(self, func.__name__, overwrite, lazy)
         self.func = func
         self.sweep = Nested()
+        # todo: howto treat FuncNode args pointing to sweeps (SystemNode)?
+        # todo: leave FuncNode as plain as possible, but is this a SystemNode?
+        # todo: if yes, then move .sweep, .run(), .table() into SystemNode
+        #
+        # discussion: by
+        #   func.arg.x1 = Sweep(10, 20, 0.2)
+        #   func.arg.x2 = Sweep(0, 1, num=100)
+        # this FuncNode 'needs' .is_running() and .next() from Nested.
+        #
+        # todo: How to combine FuncNode, Nested and all Sweeps?
+        # todo: Is this a SystemNode with sub-systems? Sweeps are systems!
+        # todo: Or should every node get a .is_running()?
+        #       - could be usefull for Concat
+        #
+        # todo: How about RunFuncNode(FuncNode, SystemNode)?
+        #       - increase the functionality by subclasses
 
     def has_new_args(self):
         tm = self.tm
@@ -224,8 +243,11 @@ class TaskManager:
         for n in nodes:
             if not isinstance(n, FuncNode):
                 continue
+            # todo: move inner loop into FuncNode.__eval__()
             if n.lazy and n._has_results() and not n.has_new_args():
+                # todo: check diff between has_new_args() vs. _new_inputs()
                 continue
+            # todo: make g.in_edges(node) an attribute to Node
             kwargs = {}
             for edge in self.g.in_edges(n):
                 name = self.g.edges[edge]['arg']
@@ -352,12 +374,14 @@ class InP:
 
 
 class Function:
+    # todo: try to replace Function with FuncNode
     def __init__(self, func):
         self._name = func.__name__
         self._func = func
 
 
 class State:
+    # todo: try to replace State with StateNode
     def __init__(self, name, init, func):
         self._name = name
         self._init = init
@@ -380,6 +404,9 @@ class SysBase:
 
 
 class BaseSweep:
+    # todo: rename it into SystemNode and inherit from Node
+    # todo: define uniqe system output as @Function def output(self): ...
+    # todo: point .__eval__() to .output.__eval__()
     def __init__(self, *args, **kwargs):
         self._args = args
         self._kwargs = kwargs
@@ -395,6 +422,7 @@ class BaseSweep:
         return f'{clsname}({args})'
 
     def register(self, tm):
+        # todo: is class decorator more pythonic?
         cls = self.__class__
         try:
             cls._inputs
@@ -571,6 +599,30 @@ class Nested:
     >>> n.as_list()
     [(10, 1), (10, 2), (20, 1), (20, 2)]
     """
+    # todo: find a general strategy for FuncNode.next()
+    #     Nested:
+    #         * Zip: Concat(Sweep()) => offs  (normal sweep)
+    #         * Zip: Concat(val, Sweep, val, Sweep) => gain  (iteration of values)
+    #         * Zip:
+    #             - Concat(Sweep(), value, Sweep(), value, ...) => x1  (zipped values)
+    #             - Concat(Sweep(), value, Sweep(), value, ...) => x2
+
+    # todo: arg-config api for sweeps
+    #
+    #   func.arg.log = True
+    #   func.arg.offs = tm.Sweep(...)
+    #   func.arg.gain = tm.Concat(val, val)
+    #   func.arg.x1 = tm.Concat(tm.Sweep, val, tm.Sweep, val)
+    #   func.arg.x2 = tm.Concat(tm.Sweep, val, tm.Sweep, val)
+    #   func.arg.zip('x1, x2')
+    #
+    #   tm.Concat          iterate over all sweeps and values
+    #   tm.ConcatHold      interrupt after each sub-sweep
+    #   tm.ConcatIter      just iterater over the top-level items
+    #
+    #   func.arg.log = True
+    #   func.arg.offs.Sweep(...)
+
     def __init__(self, *sweeps):
         self.sweeps = list(sweeps)
 
@@ -738,7 +790,7 @@ if 0:
     tm.add_func(value, start=100, step=11, idx=[0])
 
 
-if 1:
+if 0:
     # todo: idx node should have a flag for mutable datatype
     idx = ValueNode([0], name='idx')
 
