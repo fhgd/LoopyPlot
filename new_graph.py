@@ -77,7 +77,9 @@ class Node:
         self.id = Node.__count__
         Node.__count__ += 1
         self.key = f'n{self.id}'
+        # set by register(tm)
         self._tm = None
+        self._in_edges = None
 
     @property
     def tm(self):
@@ -89,6 +91,7 @@ class Node:
     def register(self, tm):
         tm.g.add_node(self)
         self._tm = tm
+        self._in_edges = tm.g.in_edges(self)
         return self
 
     def __call__(self):
@@ -164,11 +167,11 @@ class FuncNode(Node):
         #       - increase the functionality by subclasses
 
     def has_new_args(self):
-        tm = self.tm
-        idx = tm.dm._last_idx(self.key)
+        dm = self.tm.dm
+        idx = dm._last_idx(self.key)
         args = set()
-        for arg_node, _ in tm.g.in_edges(self):
-            if idx == 0 or tm.dm._last_idx(arg_node.key) > idx:
+        for arg_node, _ in self._in_edges:
+            if idx == 0 or dm._last_idx(arg_node.key) > idx:
                 args.add(arg_node)
         return args
 
@@ -180,7 +183,7 @@ class FuncNode(Node):
     def table(self):
         names = []
         nodes = []
-        for edge in self.tm.g.in_edges(self):
+        for edge in self._in_edges:
             names.append(self.tm.g.edges[edge]['arg'])
             nodes.append(edge[0])
         names.append(self.name)
@@ -199,8 +202,7 @@ class StateNode(Node):
 
     def register(self, tm):
         Node.register(self, tm)
-        tm.g.add_node(self._next)
-        self._next._tm = tm
+        Node.register(self._next, tm)
         self._next.key = self.key
         self.reset()
         return self
@@ -247,9 +249,8 @@ class TaskManager:
             if n.lazy and n._has_results() and not n.has_new_args():
                 # todo: check diff between has_new_args() vs. _new_inputs()
                 continue
-            # todo: make g.in_edges(node) an attribute to Node
             kwargs = {}
-            for edge in self.g.in_edges(n):
+            for edge in n._in_edges:
                 name = self.g.edges[edge]['arg']
                 arg_node, _ = edge
                 kwargs[name] = arg_node.get()
@@ -760,6 +761,16 @@ if 0:
     tm.func.myfunc.sweep = Nested(g, x)
 
     z = Zip(x, g)
+
+    df = tm.func.myfunc.run()
+    #     x  gain  offs  myfunc
+    # 0  10     1     0      10
+    # 1  15     1     0      15
+    # 2  20     1     0      20
+    # 3  10    10     0     100
+    # 4  15    10     0     150
+    # 5  20    10     0     200
+
 
 """
 
