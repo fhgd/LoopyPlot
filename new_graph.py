@@ -50,7 +50,7 @@ class DataManager:
         # todo:  avoid bisect_right() - 1 = -1
         return values[idx_left]
 
-    def _last_idx(self, name):
+    def last_idx(self, name):
         idxs, _ = self._data.get(name, ([0], None))
         return idxs[-1]
 
@@ -109,6 +109,10 @@ class Node:
         self.tm.dm.write(self.key, value, self.overwrite)
         return value
 
+    @property
+    def _last_idx(self):
+        return self.tm.dm.last_idx(self.key)
+
     def __repr__(self):
         return f'n{self.id}_{self.name}' if self.name else f'n{self.id}'
 
@@ -120,18 +124,27 @@ class Node:
 
     def _new_inputs(self):
         dm = self.tm.dm
-        idx = dm._last_idx(self.key)
+        idx = self._last_idx
         inps = {}
         for n, d in self._inputs().items():
-            if dm._last_idx(n.key) > idx:
+            if n._last_idx > idx:
                 inps[n] = d
         return inps
 
     def _is_new(self, idx):
-        return idx == 0 or tm.dm._last_idx(self.key) > idx
+        return idx == 0 or self._last_idx > idx
 
     def _has_results(self):
         return self.key in self.tm.dm._data
+
+    def has_new_args(self):
+        dm = self.tm.dm
+        idx = self._last_idx
+        args = set()
+        for arg_node, _ in self._in_edges:
+            if idx == 0 or arg_node._last_idx > idx:
+                args.add(arg_node)
+        return args
 
 
 class ValueNode(Node):
@@ -165,15 +178,6 @@ class FuncNode(Node):
         #
         # todo: How about RunFuncNode(FuncNode, SystemNode)?
         #       - increase the functionality by subclasses
-
-    def has_new_args(self):
-        dm = self.tm.dm
-        idx = dm._last_idx(self.key)
-        args = set()
-        for arg_node, _ in self._in_edges:
-            if idx == 0 or dm._last_idx(arg_node.key) > idx:
-                args.add(arg_node)
-        return args
 
     def run(self):
         self.tm.run(self)
@@ -243,9 +247,6 @@ class TaskManager:
         _g = self.g.reverse(copy=False)
         nodes = nx.algorithms.dfs_postorder_nodes(_g, node)
         for n in nodes:
-            if not isinstance(n, FuncNode):
-                continue
-            # todo: move inner loop into FuncNode.__eval__()
             if n.lazy and n._has_results() and not n.has_new_args():
                 # todo: check diff between has_new_args() vs. _new_inputs()
                 continue
@@ -744,7 +745,7 @@ if 0:
     n = Nested(g, d, s)
     # n.as_list()
 
-if 0:
+if 1:
 
     def myfunc(x, gain, offs=0):
         print(f'gain = {gain}')
