@@ -32,7 +32,7 @@ NOTHING = _Nothing()
 class DataManager:
     def __init__(self):
         self._data = {}
-        self._idx = 0  # == max(of all ixds) + 1
+        self._idx = 1  # == max(of all ixds) + 1
 
     def write(self, name, value, overwrite=False):
         idxs, values = self._data.setdefault(name, ([], []))
@@ -137,14 +137,15 @@ class Node:
     def _has_results(self):
         return self.key in self.tm.dm._data
 
-    def has_new_args(self):
+    def _has_new_args(self):
         dm = self.tm.dm
         idx = self._last_idx
-        args = set()
+        if not idx:
+            return True
         for arg_node, _ in self._in_edges:
-            if idx == 0 or arg_node._last_idx > idx:
-                args.add(arg_node)
-        return args
+            if arg_node._last_idx > idx:
+                return True
+        return False
 
 
 class ValueNode(Node):
@@ -247,8 +248,7 @@ class TaskManager:
         _g = self.g.reverse(copy=False)
         nodes = nx.algorithms.dfs_postorder_nodes(_g, node)
         for n in nodes:
-            if n.lazy and n._has_results() and not n.has_new_args():
-                # todo: check diff between has_new_args() vs. _new_inputs()
+            if n.lazy and not n._has_new_args():
                 continue
             kwargs = {}
             for edge in n._in_edges:
@@ -745,7 +745,7 @@ if 0:
     n = Nested(g, d, s)
     # n.as_list()
 
-if 1:
+if 0:
 
     def myfunc(x, gain, offs=0):
         print(f'gain = {gain}')
