@@ -77,9 +77,9 @@ class Node:
         self.id = Node.__count__
         Node.__count__ += 1
         self.key = f'n{self.id}'
+        self._args = {}  # arg_name: arg_node
         # set by register(tm)
         self._tm = None
-        self._in_edges = None
 
     @property
     def tm(self):
@@ -91,7 +91,6 @@ class Node:
     def register(self, tm):
         tm.g.add_node(self)
         self._tm = tm
-        self._in_edges = tm.g.in_edges(self)
         return self
 
     def __call__(self):
@@ -142,7 +141,7 @@ class Node:
         idx = self._last_idx
         if not idx:
             return True
-        for arg_node, _ in self._in_edges:
+        for arg_node in self._args.values():
             if arg_node._last_idx > idx:
                 return True
         return False
@@ -188,9 +187,9 @@ class FuncNode(Node):
     def table(self):
         names = []
         nodes = []
-        for edge in self._in_edges:
-            names.append(self.tm.g.edges[edge]['arg'])
-            nodes.append(edge[0])
+        for name, node in self._args.items():
+            names.append(name)
+            nodes.append(node)
         names.append(self.name)
         nodes.append(self)
         keys = [n.key for n in nodes]
@@ -250,11 +249,7 @@ class TaskManager:
         for n in nodes:
             if n.lazy and not n._has_new_args():
                 continue
-            kwargs = {}
-            for edge in n._in_edges:
-                name = self.g.edges[edge]['arg']
-                arg_node, _ = edge
-                kwargs[name] = arg_node.get()
+            kwargs = {name: node.get() for name, node in n._args.items()}
             retval = n.func(**kwargs)
             n.set(retval)
         return node.get()
@@ -274,8 +269,7 @@ class TaskManager:
         return node
 
     def add_func(self, func, **kwargs):
-        node = FuncNode(func)
-        node.register(self)
+        node = FuncNode(func).register(self)
         self.func._add(node)
         self._add_kwargs(node, kwargs)
         return node
@@ -285,7 +279,8 @@ class TaskManager:
             node = self._as_node(obj)
             if not node.name:
                 node.name = f'{func_node.name}_arg_{name}'
-            self.g.add_edge(node, func_node, arg=name)
+            self.g.add_edge(node, func_node)
+            func_node._args[name] = node
 
     def _as_node(self, obj):
         try:
@@ -480,8 +475,7 @@ class BaseSweep:
             self._nodes[name] = node
 
         for fn in cls._functions:
-            node = FuncNode(fn._func)
-            node.register(tm)
+            node = FuncNode(fn._func).register(tm)
             self._nodes[fn._name] = node
             _func_nodes.append(node)
 
@@ -494,8 +488,8 @@ class BaseSweep:
             self._nodes[name] = node
             _func_nodes.append(node._next)
 
-        for node in _func_nodes:
-            params = inspect.signature(node.func).parameters
+        for fnode in _func_nodes:
+            params = inspect.signature(fnode.func).parameters
             for name, param in params.items():
                 if (param.kind is inspect.Parameter.VAR_POSITIONAL or
                     param.kind is inspect.Parameter.VAR_KEYWORD):
@@ -503,7 +497,9 @@ class BaseSweep:
                 if name not in self._nodes:
                     print(f'param {name!r} is not in nodes')
                     continue
-                tm.g.add_edge(self._nodes[name], node, arg=name)
+                anode = self._nodes[name]
+                tm.g.add_edge(anode, fnode)
+                fnode._args[name] = anode
         return self
 
     def is_running(self):
@@ -745,8 +741,8 @@ if 0:
     n = Nested(g, d, s)
     # n.as_list()
 
-if 0:
 
+if 1:
     def myfunc(x, gain, offs=0):
         print(f'gain = {gain}')
         print(f'   x = {x}')
