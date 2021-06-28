@@ -76,7 +76,7 @@ class Node:
         self._lazy = lazy
         self._id = Node.__count__
         Node.__count__ += 1
-        self.key = f'n{self._id}'
+        self._key = f'n{self._id}'
         self._args = {}  # arg_name: arg_node
         # set by register(tm)
         self._tm = None
@@ -102,15 +102,15 @@ class Node:
     #todo: add empty __eval__()
 
     def get(self):
-        return self.tm.dm.read(self.key)
+        return self.tm.dm.read(self._key)
 
     def set(self, value):
-        self.tm.dm.write(self.key, value, self._overwrite)
+        self.tm.dm.write(self._key, value, self._overwrite)
         return value
 
     @property
     def _last_idx(self):
-        return self.tm.dm.last_idx(self.key)
+        return self.tm.dm.last_idx(self._key)
 
     def __repr__(self):
         return f'n{self._id}_{self._name}' if self._name else f'n{self._id}'
@@ -134,7 +134,7 @@ class Node:
         return idx == 0 or self._last_idx > idx
 
     def _has_results(self):
-        return self.key in self.tm.dm._data
+        return self._key in self.tm.dm._data
 
     def _has_new_args(self):
         dm = self.tm.dm
@@ -192,7 +192,7 @@ class FuncNode(Node):
             nodes.append(node)
         names.append(self._name)
         nodes.append(self)
-        keys = [n.key for n in nodes]
+        keys = [n._key for n in nodes]
         df = pd.DataFrame(self.tm.dm.values(keys))
         df.columns = names
         return df
@@ -207,7 +207,7 @@ class StateNode(Node):
     def register(self, tm):
         Node.register(self, tm)
         Node.register(self._next, tm)
-        self._next.key = self.key
+        self._next._key = self._key
         self.reset()
         return self
 
