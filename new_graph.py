@@ -71,7 +71,7 @@ class Node:
 
     def __init__(self, name='', overwrite=False, lazy=True):
         # todo: underscore all attributes
-        self.name = name
+        self._name = name
         self.overwrite = overwrite
         self.lazy = lazy
         self.id = Node.__count__
@@ -113,7 +113,7 @@ class Node:
         return self.tm.dm.last_idx(self.key)
 
     def __repr__(self):
-        return f'n{self.id}_{self.name}' if self.name else f'n{self.id}'
+        return f'n{self.id}_{self._name}' if self._name else f'n{self.id}'
 
     def _inputs(self):
         g = self.tm.g
@@ -190,7 +190,7 @@ class FuncNode(Node):
         for name, node in self._args.items():
             names.append(name)
             nodes.append(node)
-        names.append(self.name)
+        names.append(self._name)
         nodes.append(self)
         keys = [n.key for n in nodes]
         df = pd.DataFrame(self.tm.dm.values(keys))
@@ -219,8 +219,8 @@ class StateNode(Node):
 
     def add_next(self, func, **kwargs):
         if self not in kwargs.values():
-            kwargs[self.name] = self
-        self._next.name = f'{self.name}_next'
+            kwargs[self._name] = self
+        self._next._name = f'{self._name}_next'
         self._next.func = func
         self.tm._add_kwargs(self._next, kwargs)
         return self._next
@@ -228,10 +228,10 @@ class StateNode(Node):
 
 class Container:
     def _add(self, node):
-        name = node.name
+        name = node._name
         idx = 2
         while name in self.__dict__:
-            name = f'{node.name}_{idx}'
+            name = f'{node._name}_{idx}'
             idx += 1
         setattr(self, name, node)
 
@@ -277,8 +277,8 @@ class TaskManager:
     def _add_kwargs(self, func_node, kwargs):
         for name, obj in kwargs.items():
             node = self._as_node(obj)
-            if not node.name:
-                node.name = f'{func_node.name}_arg_{name}'
+            if not node._name:
+                node._name = f'{func_node._name}_arg_{name}'
             self.g.add_edge(node, func_node)
             func_node._args[name] = node
 
@@ -471,7 +471,7 @@ class BaseSweep:
                 msg = f'provide value for input argument {name!r}'
                 raise ValueError(msg)
             node = tm._as_node(value)
-            node.name = f'arg_{name}'
+            node._name = f'arg_{name}'
             self._nodes[name] = node
 
         for fn in cls._functions:
@@ -483,7 +483,7 @@ class BaseSweep:
             name = state._name
             node = StateNode(name, state._init)
             node._next.func = state._func
-            node._next.name = f'{name}_next'
+            node._next._name = f'{name}_next'
             node.register(tm)
             self._nodes[name] = node
             _func_nodes.append(node._next)
