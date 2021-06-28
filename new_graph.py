@@ -79,50 +79,50 @@ class Node:
         self._key = f'n{self._id}'
         self._args = {}  # arg_name: arg_node
         # set by register(tm)
-        self._tm = None
+        self.__tm = None
 
     @property
-    def tm(self):
-        if self._tm is None:
+    def _tm(self):
+        if self.__tm is None:
             msg = f'node {self!r} must registered to a tm instance'
             raise ValueError(msg)
-        return self._tm
+        return self.__tm
 
     def register(self, tm):
         tm.g.add_node(self)
-        self._tm = tm
+        self.__tm = tm
         return self
 
     def __call__(self):
         return self.eval()
 
     def eval(self):
-        return self.tm.eval(self)
+        return self._tm.eval(self)
 
     #todo: add empty __eval__()
 
     def get(self):
-        return self.tm.dm.read(self._key)
+        return self._tm.dm.read(self._key)
 
     def set(self, value):
-        self.tm.dm.write(self._key, value, self._overwrite)
+        self._tm.dm.write(self._key, value, self._overwrite)
         return value
 
     @property
     def _last_idx(self):
-        return self.tm.dm.last_idx(self._key)
+        return self._tm.dm.last_idx(self._key)
 
     def __repr__(self):
         return f'n{self._id}_{self._name}' if self._name else f'n{self._id}'
 
     def _inputs(self):
-        g = self.tm.g
+        g = self._tm.g
         nodes = nx.shortest_path_length(g, target=self)
         #~ nodes = nx.single_source_shortest_path_length(g.reverse(copy=False), self)
         return {n: nodes[n] for n, d in g.in_degree(nodes) if d == 0}
 
     def _new_inputs(self):
-        dm = self.tm.dm
+        dm = self._tm.dm
         idx = self._last_idx
         inps = {}
         for n, d in self._inputs().items():
@@ -134,10 +134,10 @@ class Node:
         return idx == 0 or self._last_idx > idx
 
     def _has_results(self):
-        return self._key in self.tm.dm._data
+        return self._key in self._tm.dm._data
 
     def _has_new_args(self):
-        dm = self.tm.dm
+        dm = self._tm.dm
         idx = self._last_idx
         if not idx:
             return True
@@ -180,7 +180,7 @@ class FuncNode(Node):
         #       - increase the functionality by subclasses
 
     def run(self):
-        self.tm.run(self)
+        self._tm.run(self)
         return self.table
 
     @property
@@ -193,7 +193,7 @@ class FuncNode(Node):
         names.append(self._name)
         nodes.append(self)
         keys = [n._key for n in nodes]
-        df = pd.DataFrame(self.tm.dm.values(keys))
+        df = pd.DataFrame(self._tm.dm.values(keys))
         df.columns = names
         return df
 
@@ -222,7 +222,7 @@ class StateNode(Node):
             kwargs[self._name] = self
         self._next._name = f'{self._name}_next'
         self._next.func = func
-        self.tm._add_kwargs(self._next, kwargs)
+        self._tm._add_kwargs(self._next, kwargs)
         return self._next
 
 
