@@ -73,7 +73,7 @@ class Node:
         # todo: underscore all attributes
         self._name = name
         self._overwrite = overwrite
-        self.lazy = lazy
+        self._lazy = lazy
         self.id = Node.__count__
         Node.__count__ += 1
         self.key = f'n{self.id}'
@@ -247,7 +247,7 @@ class TaskManager:
         _g = self.g.reverse(copy=False)
         nodes = nx.algorithms.dfs_postorder_nodes(_g, node)
         for n in nodes:
-            if n.lazy and not n._has_new_args():
+            if n._lazy and not n._has_new_args():
                 continue
             kwargs = {name: node.get() for name, node in n._args.items()}
             retval = n.func(**kwargs)
@@ -807,7 +807,7 @@ if 0:
         return start + idx[0] * step
     tm.add_func(value, start=100, step=11, idx=idx)
     tm.func.value._overwrite = True
-    tm.func.value.lazy = False
+    tm.func.value._lazy = False
 
     tm.func.value.eval()
     tm.func.value.eval()
@@ -829,7 +829,7 @@ if 0:
 
     tm.add_func(value, start=100, step=11, idx=new_idx)
     #~ tm.func.value._overwrite = True
-    tm.func.value.lazy = False
+    tm.func.value._lazy = False
 
     tm.func.value.eval()
     tm.func.value.eval()
