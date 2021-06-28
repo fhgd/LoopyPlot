@@ -101,7 +101,7 @@ class Node:
 
     #todo: add empty __eval__()
 
-    def get(self):
+    def _get(self):
         return self._tm.dm.read(self._key)
 
     def set(self, value):
@@ -249,10 +249,10 @@ class TaskManager:
         for n in nodes:
             if n._lazy and not n._has_new_args():
                 continue
-            kwargs = {name: node.get() for name, node in n._args.items()}
+            kwargs = {name: node._get() for name, node in n._args.items()}
             retval = n.func(**kwargs)
             n.set(retval)
-        return node.get()
+        return node._get()
 
     def run(self, fn):
         while 1:
@@ -450,7 +450,7 @@ class BaseSweep:
             elif isinstance(attr, State):
                 cls._states.append(attr)
                 def node_getter(self, name=name):
-                    return self._nodes[name].get()
+                    return self._nodes[name]._get()
                 setattr(cls, name, property(node_getter))
 
         for inp in sorted(_inputs, key=lambda inp: inp._counter):
