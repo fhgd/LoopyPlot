@@ -162,10 +162,10 @@ class FuncNode(Node):
     def __init__(self, func, overwrite=False, lazy=True):
         Node.__init__(self, func.__name__, overwrite, lazy)
         self._func = func
-        self.sweep = Nested()
+        self._sweep = Nested()
         # todo: howto treat FuncNode args pointing to sweeps (SystemNode)?
         # todo: leave FuncNode as plain as possible, but is this a SystemNode?
-        # todo: if yes, then move .sweep, .run(), .table() into SystemNode
+        # todo: if yes, then move ._sweep, .run(), .table() into SystemNode
         #
         # discussion: by
         #   func.arg.x1 = Sweep(10, 20, 0.2)
@@ -258,8 +258,8 @@ class TaskManager:
     def run(self, fn):
         while 1:
             self.eval(fn)
-            if fn.sweep.is_running():
-                fn.sweep._next_state()
+            if fn._sweep.is_running():
+                fn._sweep._next_state()
             else:
                 break
 
@@ -756,7 +756,7 @@ if 1:
 
     tm.add_func(myfunc, x=x.value, gain=g.value, offs=0)
 
-    tm.func.myfunc.sweep = Nested(g, x)
+    tm.func.myfunc._sweep = Nested(g, x)
 
     z = Zip(x, g)
 
