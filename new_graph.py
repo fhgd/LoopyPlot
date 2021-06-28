@@ -94,9 +94,9 @@ class Node:
         return self
 
     def __call__(self):
-        return self.eval()
+        return self._eval()
 
-    def eval(self):
+    def _eval(self):
         return self._tm.eval(self)
 
     #todo: add empty __eval__()
@@ -215,7 +215,7 @@ class StateNode(Node):
         self._set(self._init)
 
     def next(self):
-        return self._next.eval()
+        return self._next._eval()
 
     def add_next(self, func, **kwargs):
         if self not in kwargs.values():
@@ -349,7 +349,7 @@ def sweep(start, stop, step=1, num=None, idx=0):
     return start + step*delta
 
 s = sweep(1, 5, 0.5)
-s.eval()
+s._eval()
 s()
 
 # or
@@ -809,9 +809,9 @@ if 0:
     tm.func.value._overwrite = True
     tm.func.value._lazy = False
 
-    tm.func.value.eval()
-    tm.func.value.eval()
-    tm.func.value.eval()
+    tm.func.value._eval()
+    tm.func.value._eval()
+    tm.func.value._eval()
 
     df = tm.func.value.table
     # start  step  idx  value
@@ -831,9 +831,9 @@ if 0:
     #~ tm.func.value._overwrite = True
     tm.func.value._lazy = False
 
-    tm.func.value.eval()
-    tm.func.value.eval()
-    tm.func.value.eval()
+    tm.func.value._eval()
+    tm.func.value._eval()
+    tm.func.value._eval()
 
     df = tm.func.value.table
     # start  step  idx  value
