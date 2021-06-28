@@ -78,7 +78,7 @@ class Node:
         Node.__count__ += 1
         self._key = f'n{self._id}'
         self._args = {}  # arg_name: arg_node
-        # set by register(tm)
+        # set by _register(tm)
         self.__tm = None
 
     @property
@@ -88,7 +88,7 @@ class Node:
             raise ValueError(msg)
         return self.__tm
 
-    def register(self, tm):
+    def _register(self, tm):
         tm.g.add_node(self)
         self.__tm = tm
         return self
@@ -152,8 +152,8 @@ class ValueNode(Node):
         Node.__init__(self, name)
         self._value = value
 
-    def register(self, tm):
-        Node.register(self, tm)
+    def _register(self, tm):
+        Node._register(self, tm)
         self.set(self._value)
         return self
 
@@ -204,9 +204,9 @@ class StateNode(Node):
         self._init = init
         self._next = FuncNode(lambda x: x, lazy=False)
 
-    def register(self, tm):
-        Node.register(self, tm)
-        Node.register(self._next, tm)
+    def _register(self, tm):
+        Node._register(self, tm)
+        Node._register(self._next, tm)
         self._next._key = self._key
         self.reset()
         return self
@@ -264,12 +264,12 @@ class TaskManager:
 
     def add_state(self, name, init):
         node = StateNode(name, init)
-        node.register(self)
+        node._register(self)
         self.state._add(node)
         return node
 
     def add_func(self, func, **kwargs):
-        node = FuncNode(func).register(self)
+        node = FuncNode(func)._register(self)
         self.func._add(node)
         self._add_kwargs(node, kwargs)
         return node
@@ -284,13 +284,13 @@ class TaskManager:
 
     def _as_node(self, obj):
         try:
-            node = obj.register(self)
+            node = obj._register(self)
         except AttributeError:
-            node = ValueNode(obj).register(self)
+            node = ValueNode(obj)._register(self)
         return node
 
     def sweep(self, start, stop, step=1, num=None):
-        return Sweep(start, stop, step, num).register(self)
+        return Sweep(start, stop, step, num)._register(self)
 
 
 tm = TaskManager()
@@ -418,7 +418,7 @@ class BaseSweep:
         args = ', '.join(args)
         return f'{clsname}({args})'
 
-    def register(self, tm):
+    def _register(self, tm):
         # todo: is class decorator more pythonic?
         cls = self.__class__
         try:
@@ -475,7 +475,7 @@ class BaseSweep:
             self._nodes[name] = node
 
         for fn in cls._functions:
-            node = FuncNode(fn._func).register(tm)
+            node = FuncNode(fn._func)._register(tm)
             self._nodes[fn._name] = node
             _func_nodes.append(node)
 
@@ -484,7 +484,7 @@ class BaseSweep:
             node = StateNode(name, state._init)
             node._next.func = state._func
             node._next._name = f'{name}_next'
-            node.register(tm)
+            node._register(tm)
             self._nodes[name] = node
             _func_nodes.append(node._next)
 
@@ -591,8 +591,8 @@ class Sequence(BaseSweep):
 class Nested:
     """Iterate over nested sweeps.
 
-    >>> s1 = Sweep(10, 20, step=10).register(tm)
-    >>> s2 = Sweep(1, 2, step=1).register(tm)
+    >>> s1 = Sweep(10, 20, step=10)._register(tm)
+    >>> s2 = Sweep(1, 2, step=1)._register(tm)
     >>> n = Nested(s1, s2)
     >>> n.as_list()
     [(10, 1), (10, 2), (20, 1), (20, 2)]
@@ -724,18 +724,18 @@ class Zip:
 
 
 if 0:
-    g = Sweep(100, 200, num=2).register(tm)
-    d = Sweep(2, 2).register(tm)
-    s = Sweep(5, 15, num=3).register(tm)
+    g = Sweep(100, 200, num=2)._register(tm)
+    d = Sweep(2, 2)._register(tm)
+    s = Sweep(5, 15, num=3)._register(tm)
 
 
     n = Nested(g, d, s)
     # n.as_list()
 
 if 0:
-    g = Sweep(100, 200, num=2).register(tm)
-    d = Sweep(2, 5).register(tm)
-    s = Sweep(0, 10, num=d.value).register(tm)
+    g = Sweep(100, 200, num=2)._register(tm)
+    d = Sweep(2, 5)._register(tm)
+    s = Sweep(0, 10, num=d.value)._register(tm)
 
 
     n = Nested(g, d, s)
@@ -750,8 +750,8 @@ if 1:
         print()
         return gain*x + offs
 
-    x = Sweep(10, 20, step=5).register(tm)
-    g = Sequence([1, 10]).register(tm)
+    x = Sweep(10, 20, step=5)._register(tm)
+    g = Sequence([1, 10])._register(tm)
 
     tm.add_func(myfunc, x=x.value, gain=g.value, offs=0)
 
