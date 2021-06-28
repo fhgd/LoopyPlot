@@ -72,7 +72,7 @@ class Node:
     def __init__(self, name='', overwrite=False, lazy=True):
         # todo: underscore all attributes
         self._name = name
-        self.overwrite = overwrite
+        self._overwrite = overwrite
         self.lazy = lazy
         self.id = Node.__count__
         Node.__count__ += 1
@@ -105,7 +105,7 @@ class Node:
         return self.tm.dm.read(self.key)
 
     def set(self, value):
-        self.tm.dm.write(self.key, value, self.overwrite)
+        self.tm.dm.write(self.key, value, self._overwrite)
         return value
 
     @property
@@ -806,7 +806,7 @@ if 0:
         idx[0] += 1
         return start + idx[0] * step
     tm.add_func(value, start=100, step=11, idx=idx)
-    tm.func.value.overwrite = True
+    tm.func.value._overwrite = True
     tm.func.value.lazy = False
 
     tm.func.value.eval()
@@ -828,7 +828,7 @@ if 0:
         return start + idx[0] * step
 
     tm.add_func(value, start=100, step=11, idx=new_idx)
-    #~ tm.func.value.overwrite = True
+    #~ tm.func.value._overwrite = True
     tm.func.value.lazy = False
 
     tm.func.value.eval()
