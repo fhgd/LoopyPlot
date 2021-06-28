@@ -157,10 +157,11 @@ class ValueNode(Node):
         self._set(self._value)
         return self
 
+
 class FuncNode(Node):
     def __init__(self, func, overwrite=False, lazy=True):
         Node.__init__(self, func.__name__, overwrite, lazy)
-        self.func = func
+        self._func = func
         self.sweep = Nested()
         # todo: howto treat FuncNode args pointing to sweeps (SystemNode)?
         # todo: leave FuncNode as plain as possible, but is this a SystemNode?
@@ -221,7 +222,7 @@ class StateNode(Node):
         if self not in kwargs.values():
             kwargs[self._name] = self
         self._next._name = f'{self._name}_next'
-        self._next.func = func
+        self._next._func = func
         self._tm._add_kwargs(self._next, kwargs)
         return self._next
 
@@ -250,7 +251,7 @@ class TaskManager:
             if n._lazy and not n._has_new_args():
                 continue
             kwargs = {name: node._get() for name, node in n._args.items()}
-            retval = n.func(**kwargs)
+            retval = n._func(**kwargs)
             n._set(retval)
         return node._get()
 
@@ -482,14 +483,14 @@ class BaseSweep:
         for state in cls._states:
             name = state._name
             node = StateNode(name, state._init)
-            node._next.func = state._func
+            node._next._func = state._func
             node._next._name = f'{name}_next'
             node._register(tm)
             self._nodes[name] = node
             _func_nodes.append(node._next)
 
         for fnode in _func_nodes:
-            params = inspect.signature(fnode.func).parameters
+            params = inspect.signature(fnode._func).parameters
             for name, param in params.items():
                 if (param.kind is inspect.Parameter.VAR_POSITIONAL or
                     param.kind is inspect.Parameter.VAR_KEYWORD):
