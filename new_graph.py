@@ -93,6 +93,10 @@ class Node:
         self.__tm = tm
         return self
 
+    @classmethod
+    def _as_node(cls, obj):
+        return obj if isinstance(obj, cls) else ValueNode(obj)
+
     def __call__(self):
         return self._eval()
 
@@ -159,10 +163,11 @@ class ValueNode(Node):
 
 
 class FuncNode(Node):
-    def __init__(self, func, overwrite=False, lazy=True):
-        Node.__init__(self, func.__name__, overwrite, lazy)
-        self._func = func
+    def __init__(self, func=None, name='', overwrite=False, lazy=True):
+        name = name if name or not func else func.__name__
+        Node.__init__(self, name, overwrite, lazy)
         self._sweep = Nested()
+        self._func = func
         # todo: howto treat FuncNode args pointing to sweeps (SystemNode)?
         # todo: leave FuncNode as plain as possible, but is this a SystemNode?
         # todo: if yes, then move ._sweep, .run(), .table() into SystemNode
@@ -370,20 +375,30 @@ class InP:
         self._default = default
         self._name = ''
 
+    def __set_name__(self, cls, name):
+        self._name = name
+
+    def __get__(self, obj, cls=None):
+        return obj._nodes.get(self._name, self._default)._eval()
+
 
 class Function:
-    # todo: try to replace Function with FuncNode
-    def __init__(self, func):
-        self._name = func.__name__
+    def __init__(self, func, name=''):
+        self._name = name if name else func.__name__
         self._func = func
+
+    def __get__(self, obj, cls=None):
+        return obj._nodes.get(self._name, self._func)
 
 
 class State:
-    # todo: try to replace State with StateNode
     def __init__(self, name, init, func):
         self._name = name
         self._init = init
         self._func = func
+
+    def __get__(self, obj, cls=None):
+        return obj._nodes.get(self._name, self._init)._get()
 
 
 def state(func=None, init=0):
@@ -395,101 +410,61 @@ def state(func=None, init=0):
         return wrap(func)
 
 
-class SysBase:
-    _inputs = []
-    _functins = []
-    _states = []
-
-
-class BaseSweep:
-    # todo: rename it into SystemNode and inherit from Node
-    # todo: define uniqe system output as @Function def output(self): ...
-    # todo: point .__eval__() to .output.__eval__()
+class SystemNode(FuncNode):
     def __init__(self, *args, **kwargs):
-        self._args = args
-        self._kwargs = kwargs
         self._nodes = {}
-        self._tm = None
+        self._states = []
+        self._func_nodes = [self]
 
-    def __repr__(self):
-        clsname = self.__class__.__name__
-        args = [repr(value) for value in self._args]
-        for name, value in self._kwargs.items():
-            args.append(f'{name}={value!r}')
-        args = ', '.join(args)
-        return f'{clsname}({args})'
+        inputs = []
+        retval = Function(lambda: None, '__return__')
 
-    def _register(self, tm):
-        # todo: is class decorator more pythonic?
-        cls = self.__class__
-        try:
-            cls._inputs
-        except AttributeError:
-            cls._inputs = []
-        try:
-            cls._functions
-        except AttributeError:
-            cls._functions = []
-        try:
-            cls._states
-        except AttributeError:
-            cls._states = []
-
-        _inputs = []
         for name, attr in self.__class__.__dict__.items():
             if isinstance(attr, InP):
-                _inputs.append(attr)
-                attr._name = name
-                def node_getter(self, name=name):
-                    return self._nodes[name].__call__()
-                setattr(cls, name, property(node_getter))
+                inputs.append(attr)
             elif isinstance(attr, Function):
-                cls._functions.append(attr)
-                def node_getter(self, name=name):
-                    return self._nodes[name]
-                setattr(cls, name, property(node_getter))
+                if attr._name == '__return__':
+                    retval = attr
+                else:
+                    node = FuncNode(attr._func)
+                    self._nodes[attr._name] = node
+                    self._func_nodes.append(node)
             elif isinstance(attr, State):
-                cls._states.append(attr)
-                def node_getter(self, name=name):
-                    return self._nodes[name]._get()
-                setattr(cls, name, property(node_getter))
+                name = attr._name
+                node = StateNode(name, attr._init)
+                node._next._func = attr._func
+                node._next._name = f'{name}_next'
+                self._nodes[name] = node
+                self._func_nodes.append(node._next)
+                self._states.append(node)
 
-        for inp in sorted(_inputs, key=lambda inp: inp._counter):
-            cls._inputs.append(inp)
-
-        # init of instance with nodes
-        self._tm = tm
-        self._nodes = {}
-        _func_nodes = []
-
-        for idx, inp in enumerate(cls._inputs):
+        inputs = sorted(inputs, key=lambda inp: inp._counter)
+        for idx, inp in enumerate(inputs):
             name = inp._name
+            default = inp._default
             try:
-                value = self._args[idx]
+                value = args[idx]
             except IndexError:
-                value = self._kwargs.get(name, inp._default)
+                value = kwargs.get(name, default)
             if value is NOTHING:
                 msg = f'provide value for input argument {name!r}'
                 raise ValueError(msg)
-            node = tm._as_node(value)
+            node = Node._as_node(value)
             node._name = f'arg_{name}'
             self._nodes[name] = node
 
-        for fn in cls._functions:
-            node = FuncNode(fn._func)._register(tm)
-            self._nodes[fn._name] = node
-            _func_nodes.append(node)
+        argitems = [repr(value) for value in args]
+        argitems += [f'{name}={val!r}' for name, val in kwargs.items()]
+        name = f'{self.__class__.__name__}({", ".join(argitems)})'
+        super().__init__(retval._func, name)
 
-        for state in cls._states:
-            name = state._name
-            node = StateNode(name, state._init)
-            node._next._func = state._func
-            node._next._name = f'{name}_next'
+    def _register(self, tm):
+        super()._register(tm)
+        for node in self._nodes.values():
             node._register(tm)
-            self._nodes[name] = node
-            _func_nodes.append(node._next)
-
-        for fnode in _func_nodes:
+        # todo: put this into __init__ as much as possible
+        # todo: func_node._register(tm) should be enough!
+        for fnode in self._func_nodes:
             params = inspect.signature(fnode._func).parameters
             for name, param in params.items():
                 if (param.kind is inspect.Parameter.VAR_POSITIONAL or
@@ -503,39 +478,40 @@ class BaseSweep:
                 fnode._args[name] = anode
         return self
 
-    def is_running(self):
-        return 0 <= self.idx < len(self) - 1
-
-    def reset(self):
-        nodes = self._nodes
-        for state in self._states:
-            nodes[state._name].reset()
+    def _show(self):
+        for name, node in self._nodes.items():
+            print(f'{name}:  {node}._value = {node._value}')
 
     def _next_state(self, name=''):
-        names = [name] if name else [s._name for s in self._states]
-        nodes = self._nodes
-        return tuple(nodes[name].next() for name in names)
+        return tuple(state._next() for state in self._states)
 
-    def next(self):
-        new_inputs = self._nodes['value']._new_inputs()
+    def _next(self):
+        new_inputs = self._new_inputs()
         if not new_inputs:
             if self.is_running():
                 self._next_state()
             else:
                 raise StopIteration
-        return self.value()
+        return self._eval()
 
-    __next__ = next
+    __next__ = _next
 
     def __iter__(self):
         return self
+
+    def is_running(self):
+        return 0 <= self.idx < len(self) - 1
+
+    def reset(self):
+        for state in self._states:
+            state.reset()
 
     def as_list(self):
         self.reset()
         return list(self)
 
 
-class Sweep(BaseSweep):
+class Sweep(SystemNode):
     start = InP()
     stop  = InP()
     num   = InP(None)
@@ -559,7 +535,7 @@ class Sweep(BaseSweep):
         return idx + 1
 
     @Function
-    def value(idx, start, aux):
+    def __return__(idx, start, aux):
         return start + aux.step * idx
 
     def __len__(self):
@@ -574,7 +550,7 @@ class Sweep(BaseSweep):
         return max(self.start, self.stop)
 
 
-class Sequence(BaseSweep):
+class Sequence(SystemNode):
     items = InP()
 
     @state(init=0)
@@ -582,7 +558,7 @@ class Sequence(BaseSweep):
         return idx + 1
 
     @Function
-    def value(idx, items):
+    def __return__(idx, items):
         return items[idx]
 
     def __len__(self):
@@ -636,7 +612,7 @@ class Nested:
             sweep.reset()
 
     def value(self):
-        return tuple(s.value() for s in self.sweeps)
+        return tuple(s._eval() for s in self.sweeps)
 
     def is_running(self):
         return any(s.is_running() for s in self.sweeps)
@@ -656,7 +632,7 @@ class Nested:
     def next(self):
         new_inputs = []
         for sweep in self.sweeps:
-            new_inputs += sweep._nodes['value']._new_inputs()
+            new_inputs += sweep._new_inputs()
         if not new_inputs:
             if self.is_running():
                 self._next_state()
@@ -733,10 +709,10 @@ if 0:
     n = Nested(g, d, s)
     # n.as_list()
 
-if 0:
+if 1:
     g = Sweep(100, 200, num=2)._register(tm)
     d = Sweep(2, 5)._register(tm)
-    s = Sweep(0, 10, num=d.value)._register(tm)
+    s = Sweep(0, 10, num=d)._register(tm)
 
 
     n = Nested(g, d, s)
@@ -744,21 +720,20 @@ if 0:
 
 
 if 1:
-    def myfunc(x, gain, offs=0):
+    def myfunc(x, gain=1, offs=0):
         print(f'gain = {gain}')
         print(f'   x = {x}')
         print(f'offs = {offs}')
         print()
         return gain*x + offs
 
-    x = Sweep(10, 20, step=5)._register(tm)
-    g = Sequence([1, 10])._register(tm)
-
-    tm.add_func(myfunc, x=x.value, gain=g.value, offs=0)
+    x = Sweep(10, 20, step=5)
+    g = Sequence([1, 10])
+    tm.add_func(myfunc, x=x, gain=g, offs=0)
 
     tm.func.myfunc._sweep = Nested(g, x)
 
-    z = Zip(x, g)
+    #~ z = Zip(x, g)
 
     df = tm.func.myfunc.run()
     #     x  gain  offs  myfunc
@@ -768,6 +743,11 @@ if 1:
     # 3  10    10     0     100
     # 4  15    10     0     150
     # 5  20    10     0     200
+
+if 1:
+    m1 = Sweep(2, 5)._register(tm)
+    m2 = Sweep(15, 25, num=3)._register(tm)
+
 
 
 """
