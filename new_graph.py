@@ -104,7 +104,7 @@ class Node:
     def _get(self):
         return self._tm.dm.read(self._key)
 
-    def set(self, value):
+    def _set(self, value):
         self._tm.dm.write(self._key, value, self._overwrite)
         return value
 
@@ -154,7 +154,7 @@ class ValueNode(Node):
 
     def _register(self, tm):
         Node._register(self, tm)
-        self.set(self._value)
+        self._set(self._value)
         return self
 
 class FuncNode(Node):
@@ -212,7 +212,7 @@ class StateNode(Node):
         return self
 
     def reset(self):
-        self.set(self._init)
+        self._set(self._init)
 
     def next(self):
         return self._next.eval()
@@ -251,7 +251,7 @@ class TaskManager:
                 continue
             kwargs = {name: node._get() for name, node in n._args.items()}
             retval = n.func(**kwargs)
-            n.set(retval)
+            n._set(retval)
         return node._get()
 
     def run(self, fn):
