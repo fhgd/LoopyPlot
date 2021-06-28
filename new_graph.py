@@ -74,9 +74,9 @@ class Node:
         self._name = name
         self._overwrite = overwrite
         self._lazy = lazy
-        self.id = Node.__count__
+        self._id = Node.__count__
         Node.__count__ += 1
-        self.key = f'n{self.id}'
+        self.key = f'n{self._id}'
         self._args = {}  # arg_name: arg_node
         # set by register(tm)
         self._tm = None
@@ -113,7 +113,7 @@ class Node:
         return self.tm.dm.last_idx(self.key)
 
     def __repr__(self):
-        return f'n{self.id}_{self._name}' if self._name else f'n{self.id}'
+        return f'n{self._id}_{self._name}' if self._name else f'n{self._id}'
 
     def _inputs(self):
         g = self.tm.g
