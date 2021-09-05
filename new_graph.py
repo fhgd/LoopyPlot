@@ -483,6 +483,7 @@ class SystemNode(FuncNode):
             print(f'{name}:  {node}._value = {node._value}')
 
     def _next_state(self, name=''):
+        # todo: prevent depencency of order on state evaluation!
         return tuple(state._next() for state in self._states)
 
     def _next(self):
@@ -581,7 +582,7 @@ class Nested:
     #         * Zip:
     #             - Concat(Sweep(), value, Sweep(), value, ...) => x1  (zipped values)
     #             - Concat(Sweep(), value, Sweep(), value, ...) => x2
-
+    #
     # todo: arg-config api for sweeps
     #
     #   func.arg.log = True
@@ -591,12 +592,23 @@ class Nested:
     #   func.arg.x2 = tm.Concat(tm.Sweep, val, tm.Sweep, val)
     #   func.arg.zip('x1, x2')
     #
+    #   # Basic Loops
+    #   tm.Loop(val, ...)                        like Sequence(val, ...)
+    #   tm.LoopLin(start, stop, step, num=None)  like Sweep()
+    #   tm.LoopLog(start, stop, num=None)        like LogSweep
+    #
+    #   # Some Loop Operations
     #   tm.Concat          iterate over all sweeps and values
     #   tm.ConcatHold      interrupt after each sub-sweep
     #   tm.ConcatIter      just iterater over the top-level items
     #
     #   func.arg.log = True
     #   func.arg.offs.Sweep(...)
+    #   func.arg(
+    #       offs=Sweep(...),
+    #       gain=123,
+    #       x1=Loop(...),
+    #   )
 
     def __init__(self, *sweeps):
         self.sweeps = list(sweeps)
@@ -795,7 +807,7 @@ if 0:
     tm.func.value._eval()
 
     df = tm.func.value.table
-    # start  step  idx  value
+    #      start  step  idx  value
     # 0    100    11  [3]    133
 
 
@@ -817,7 +829,7 @@ if 0:
     tm.func.value._eval()
 
     df = tm.func.value.table
-    # start  step  idx  value
+    #      start  step  idx  value
     # 0    100    11  [3]    111
     # 1    100    11  [3]    122
     # 2    100    11  [3]    133
