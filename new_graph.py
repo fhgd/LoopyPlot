@@ -435,6 +435,8 @@ class SystemNode(FuncNode):
             else:
                 yield state
 
+
+class BaseLoopNode(SystemNode):
     def _next(self):
         new_inputs = self._new_inputs()
         if not new_inputs:
@@ -461,7 +463,7 @@ class SystemNode(FuncNode):
         return list(self)
 
 
-class Sweep(SystemNode):
+class Sweep(BaseLoopNode):
     start = InP()
     stop  = InP()
     num   = InP(None)
@@ -500,7 +502,7 @@ class Sweep(SystemNode):
         return max(self.start, self.stop)
 
 
-class Sequence(SystemNode):
+class Sequence(BaseLoopNode):
     items = InP()
 
     @state(init=0)
@@ -799,11 +801,8 @@ class Signal(SystemNode):
     def __return__(idx, values):
         return values[idx]
 
-    def __len__(self):
-        return 10
 
-
-if 0:
+if 1:
     t = Sweep(0, 10, step=0.2)._register(tm)
     s = Signal(t=t)._register(tm)
 
