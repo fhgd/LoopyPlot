@@ -721,7 +721,7 @@ if 0:
     n = Nested(g, d, s)
     # n.as_list()
 
-if 1:
+if 0:
     g = Sweep(100, 200, num=2)._register(tm)
     d = Sweep(2, 5)._register(tm)
     s = Sweep(0, 10, num=d)._register(tm)
@@ -731,7 +731,7 @@ if 1:
     # n.as_list()
 
 
-if 1:
+if 0:
     def myfunc(x, gain=1, offs=0):
         print(f'gain = {gain}')
         print(f'   x = {x}')
@@ -756,11 +756,36 @@ if 1:
     # 4  15    10     0     150
     # 5  20    10     0     200
 
-if 1:
+if 0:
     m1 = Sweep(2, 5)._register(tm)
     m2 = Sweep(15, 25, num=3)._register(tm)
 
 
+
+class Signal(SystemNode):
+    values = InP([0,   1,   3])
+    times  = InP([0, 0.1, 0.3])
+    t      = InP(0)
+
+    @state(init=0)
+    def idx(idx, t, times):
+        idx_next = idx + 1
+        if idx_next < len(times) and t >= times[idx_next]:
+            return idx_next
+        else:
+            return idx
+
+    @Function
+    def __return__(idx, values):
+        return values[idx]
+
+    def __len__(self):
+        return 10
+
+
+if 1:
+    t = Sweep(0, 10, step=0.2)._register(tm)
+    s = Signal(t=t)._register(tm)
 
 """
 
