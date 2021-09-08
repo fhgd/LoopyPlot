@@ -50,6 +50,9 @@ class DataManager:
         # todo:  avoid bisect_right() - 1 = -1
         return values[idx_left]
 
+    def __contains__(self, node):
+        return node._key in self._data
+
     def last_idx(self, name):
         idxs, _ = self._data.get(name, ([0], None))
         return idxs[-1]
@@ -208,20 +211,23 @@ class StateNode(Node):
     def __init__(self, name, init=0):
         Node.__init__(self, name)
         self._init = init
-        self._next = FuncNode(lambda x: x, lazy=False)
+        self._next = FuncNode(lambda x: x, overwrite=True)
 
     def _register(self, tm):
         Node._register(self, tm)
         Node._register(self._next, tm)
-        self._next._key = self._key
         self.reset()
         return self
 
     def reset(self):
-        self._set(self._init)
+        if self not in self._tm.dm or self._get() != self._init:
+            self._set(self._init)
 
-    def next(self):
+    def next_eval(self):
         return self._next._eval()
+
+    def next_update(self):
+        return self._set(self._next._get())
 
     def add_next(self, func, **kwargs):
         if self not in kwargs.values():
@@ -297,73 +303,6 @@ class TaskManager:
 
     def sweep(self, start, stop, step=1, num=None):
         return Sweep(start, stop, step, num)._register(self)
-
-
-tm = TaskManager()
-
-
-if 0:
-    def quad(x, gain=1, offs=0):
-        return gain * x**2 + offs
-
-    def double(x):
-        return 2*x
-
-    idx = tm.add_state('idx', 0)
-    idx.add_next(lambda x: x + 1, x=idx)
-    #~ idx.add_next(lambda idx: idx + 1)
-
-
-"""
-idx = tm.add_state('idx', init=0)
-
-@idx.add_next(x=idx)
-def func(x):
-    return x + 1
-
-
-@tm.new_state
-def idx(idx=0, x=other_node_func, y=123):
-    # use only kwargs if next_func should be configured completely
-    return idx + 1
-
-
-@tm.new_func
-def myquad(x, y=idx, z=123, gain=Sweep(5)):
-    return x + y + z
-
-myquad.arg.x = tm.sweep(5)
-myquad.arg.x.sweep(5)
-
-"""
-
-if 0:
-    tm.add_func(double, x=idx)
-    tm.add_func(quad, x=2, gain=tm.func.double, offs=0)
-
-    print(tm.eval(tm.func.quad))
-    for n in range(4):
-        tm.eval(idx._next)
-        print(tm.eval(tm.func.quad))
-
-    tm.dm._data
-
-
-"""
-@tm.new_func
-def sweep(start, stop, step=1, num=None, idx=0):
-    return start + step*delta
-
-s = sweep(1, 5, 0.5)
-s._eval()
-s()
-
-# or
-
-s.value
-s.next
-s.is_running
-"""
 
 
 class InP:
@@ -483,8 +422,18 @@ class SystemNode(FuncNode):
             print(f'{name}:  {node}._value = {node._value}')
 
     def _next_state(self, name=''):
-        # todo: prevent depencency of order on state evaluation!
-        return tuple(state._next() for state in self._states)
+        states = tuple(self._iter_all_states())
+        for state in states:
+            state.next_eval()
+        for state in states:
+            state.next_update()
+
+    def _iter_all_states(self):
+        for state in self._states:
+            if isinstance(state, SystemNode):
+                yield from state._iter_all_states()
+            else:
+                yield state
 
     def _next(self):
         new_inputs = self._new_inputs()
@@ -712,6 +661,77 @@ class Zip:
         return list(self)
 
 
+### Tests ###
+
+
+tm = TaskManager()
+
+
+if 1:
+    def quad(x, gain=1, offs=0):
+        return gain * x**2 + offs
+
+    def double(x):
+        return 2*x
+
+    idx = tm.add_state('idx', 0)
+    idx.add_next(lambda x: x + 1, x=idx)
+    #~ idx.add_next(lambda idx: idx + 1)
+
+    lst = Sequence([3, 4, 5])._register(tm)
+
+"""
+idx = tm.add_state('idx', init=0)
+
+@idx.add_next(x=idx)
+def func(x):
+    return x + 1
+
+
+@tm.new_state
+def idx(idx=0, x=other_node_func, y=123):
+    # use only kwargs if next_func should be configured completely
+    return idx + 1
+
+
+@tm.new_func
+def myquad(x, y=idx, z=123, gain=Sweep(5)):
+    return x + y + z
+
+myquad.arg.x = tm.sweep(5)
+myquad.arg.x.sweep(5)
+
+"""
+
+if 0:
+    tm.add_func(double, x=idx)
+    tm.add_func(quad, x=2, gain=tm.func.double, offs=0)
+
+    print(tm.eval(tm.func.quad))
+    for n in range(4):
+        tm.eval(idx._next)
+        print(tm.eval(tm.func.quad))
+
+    tm.dm._data
+
+
+"""
+@tm.new_func
+def sweep(start, stop, step=1, num=None, idx=0):
+    return start + step*delta
+
+s = sweep(1, 5, 0.5)
+s._eval()
+s()
+
+# or
+
+s.value
+s.next
+s.is_running
+"""
+
+
 if 0:
     g = Sweep(100, 200, num=2)._register(tm)
     d = Sweep(2, 2)._register(tm)
@@ -731,7 +751,7 @@ if 0:
     # n.as_list()
 
 
-if 0:
+if 1:
     def myfunc(x, gain=1, offs=0):
         print(f'gain = {gain}')
         print(f'   x = {x}')
@@ -783,7 +803,7 @@ class Signal(SystemNode):
         return 10
 
 
-if 1:
+if 0:
     t = Sweep(0, 10, step=0.2)._register(tm)
     s = Signal(t=t)._register(tm)
 
