@@ -372,6 +372,7 @@ class SystemNode(FuncNode):
     def __init__(self, *args, **kwargs):
         self._nodes = {}
         self._states = []
+        self._subsys = []
         self._func_nodes = [self]
 
         inputs = []
@@ -416,6 +417,10 @@ class SystemNode(FuncNode):
         name = f'{self.__class__.__name__}({", ".join(argitems)})'
         super().__init__(retval._func, name)
 
+    def add_subsys(self, system, name='', **kwargs):
+        self._subsys.append(system)
+        return system
+
     def _register(self, tm):
         super()._register(tm)
         for node in self._nodes.values():
@@ -449,10 +454,9 @@ class SystemNode(FuncNode):
 
     def _iter_all_states(self):
         for state in self._states:
-            if isinstance(state, SystemNode):
-                yield from state._iter_all_states()
-            else:
-                yield state
+            yield state
+        for subs in self._subsys:
+            yield from subs._iter_all_states()
 
 
 class BaseLoopNode(SystemNode):
