@@ -354,6 +354,20 @@ def state(func=None, init=0):
         return wrap(func)
 
 
+def zip_lazy(*args):
+    iters = [iter(arg) for arg in args]
+    while 1:
+        values = []
+        for it in iters:
+            try:
+                values.append(next(it))
+            except StopIteration:
+                pass
+        if not values:
+            break
+        yield tuple(values)
+
+
 class SystemNode(FuncNode):
     def __init__(self, *args, **kwargs):
         self._nodes = {}
