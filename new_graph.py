@@ -211,19 +211,22 @@ class FuncNode(Node):
 class StateNode(Node):
     def __init__(self, name, init=0):
         Node.__init__(self, name)
-        self._init = init
+        self._init = ValueNode(init)
+        self._init._root = self
         self._next = FuncNode(lambda x: x, overwrite=True)
         self._next._root = self
 
     def _register(self, tm):
         Node._register(self, tm)
         Node._register(self._next, tm)
+        self._init._register(tm)
         self.reset()
         return self
 
     def reset(self):
-        if self not in self._tm.dm or self._get() != self._init:
-            self._set(self._init)
+        init = self._init._get()
+        if self not in self._tm.dm or self._get() != init:
+            self._set(init)
 
     def next_eval(self):
         return self._next._eval()
