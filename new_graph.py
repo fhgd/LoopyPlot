@@ -304,6 +304,9 @@ class StateNode(Node):
         self._next._add_args_kwargs(*args, **kwargs)
         return self._next
 
+    def _iter_state_updates(self):
+        yield self._next
+
 
 class Container:
     def _add(self, node):
@@ -643,6 +646,45 @@ class ZipSys(LoopNode):
         return min(len(loop) for loop in self._subsys)
 
 
+class NestedSys(LoopNode):
+    def __config__(self, *args, **kwargs):
+        self._subsys.extend(args)
+
+    @Function
+    def __return__(subsys):
+        return subsys
+
+    def idxs(self):
+        return list(range(len(self._subsys)))
+
+    def _next_updates(self):
+        loops = list(self._subsys)
+        idxs = self.idxs()
+        n = len(idxs) - 1
+        while not loops[idxs[n]].is_running():
+            n -= 1
+        next_states = set(state._next for state in loops[idxs[n]]._states)
+        #~ print(f'{n=}')
+        #~ print(f'{next_states =}')
+        yield next_states
+
+        init_states = set()
+        idxs =  self.idxs()   # refresh loops due to possible new task
+        while n < len(idxs) - 1:
+            n += 1
+            #~ print(f'    {n = }')
+            loop = loops[idxs[n]]
+            if not loop.is_running():
+                init_states.update(state._init for state in loop._states)
+                idxs = self.idxs()   # refresh loops due to possible new task
+        #~ print(f'{init_states =}')
+        yield init_states
+
+    def is_running(self):
+        loops = list(self._subsys)
+        return any(loops[idx].is_running() for idx in self.idxs())
+
+
 class Nested:
     """Iterate over nested sweeps.
 
@@ -795,7 +837,7 @@ class Zip:
 tm = TaskManager()
 
 
-if 1:
+if 0:
     def quad(x, gain=1, offs=0):
         return gain * x**2 + offs
 
@@ -879,7 +921,7 @@ if 0:
     # n.as_list()
 
 
-if 1:
+if 0:
     def myfunc(x, gain=1, offs=0):
         print(f'gain = {gain}')
         print(f'   x = {x}')
@@ -904,12 +946,20 @@ if 1:
     # 4  15    10     0     150
     # 5  20    10     0     200
 
+
+if 1:
+    g = Sequence([3, 5])._register(tm)
+    h = Sequence([127, 255])._register(tm)
+    x = Sweep(10, 20, step=5)._register(tm)
+
+    n = NestedSys(g, h, x)._register(tm)
+
 if 0:
     m1 = Sweep(2, 5)._register(tm)
     m2 = Sweep(15, 25, num=3)._register(tm)
 
-if 1:
-    z = ZipSys(x, g)._register(tm)
+if 0:
+    z = ZipSys(g, x)._register(tm)
 
 
 class Signal(SystemNode):
@@ -930,7 +980,7 @@ class Signal(SystemNode):
         return values[idx]
 
 
-if 1:
+if 0:
     t = Sweep(0, 10, step=0.2)._register(tm)
     s = Signal(t=t)._register(tm)
 
@@ -1005,3 +1055,14 @@ if 0:
     # 1    100    11  [3]    122
     # 2    100    11  [3]    133
 
+
+"""
+todo:
+
+Idee:
+
+Um die Möglichkeit der config-Erstellung eines Systems zu ermöglichen,
+sollte nicht eine leer Instanz (weiter-) konfiguriert werden, sondern eine neue
+Klasse erzeugt werden, welche später beliebig oft instanziert werden kann!
+(ala __new__???)
+"""
