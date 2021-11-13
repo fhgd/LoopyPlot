@@ -458,6 +458,20 @@ class SystemNode(FuncNode):
         for subs in self._subsys:
             yield from subs._iter_all_states()
 
+    def _next_updates(self):
+        next_nodes = [ [set(state._next for state in self._states)] ]
+        next_nodes += [sub._next_updates() for sub in self._subsys]
+        return [set().union(*vals) for vals in zip_lazy(*next_nodes)]
+
+    def update(self):
+        for nodes in self._next_updates():
+            #~ print(f'nodes for update: {nodes}')
+            for node in nodes:
+                node._eval()
+            for node in nodes:
+                node._root._set(node._get())
+        return self._eval()
+
 
 class BaseLoopNode(SystemNode):
     def _next(self):
