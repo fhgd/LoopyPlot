@@ -81,6 +81,7 @@ class Node:
         Node.__count__ += 1
         self._key = f'n{self._id}'
         self._args = {}  # arg_name: arg_node
+        self._root = None
         # set by _register(tm)
         self.__tm = None
 
@@ -212,6 +213,7 @@ class StateNode(Node):
         Node.__init__(self, name)
         self._init = init
         self._next = FuncNode(lambda x: x, overwrite=True)
+        self._next._root = self
 
     def _register(self, tm):
         Node._register(self, tm)
