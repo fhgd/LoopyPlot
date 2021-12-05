@@ -231,6 +231,34 @@ class FuncNode(Node):
         return df
 
 
+class TupleNode(FuncNode):
+    @staticmethod
+    def __return__(*args):
+        return args
+
+    def __init__(self, name, *args):
+        super().__init__(self.__return__, name)
+        self._add_args_kwargs(*args)
+
+    def append(self, obj):
+        self._add_args_kwargs(obj)
+
+    def extend(self, items):
+        self._add_args_kwargs(*items)
+
+    def __iter__(self):
+        return iter(self._args)
+
+    def __reversed__(self):
+        return reversed(self._args)
+
+    def __len__(self):
+        return len(self._args)
+
+    def __getitem__(self, idx):
+        return self._args[idx]
+
+
 class StateNode(Node):
     def __init__(self, name, init=0):
         Node.__init__(self, name)
