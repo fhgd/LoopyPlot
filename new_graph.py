@@ -5,6 +5,8 @@ import pandas as pd
 import inspect
 from types import FunctionType, SimpleNamespace
 
+import itertools
+
 
 class _Nothing:
     """
@@ -80,7 +82,8 @@ class Node:
         self._id = Node.__count__
         Node.__count__ += 1
         self._key = f'n{self._id}'
-        self._args = {}  # arg_name: arg_node
+        self._kwargs = {}  # {arg_name: arg_node}
+        self._args = []    # [arg_node]
         self._root = None
         # set by _register(tm)
         self.__tm = None
@@ -99,7 +102,7 @@ class Node:
 
     @classmethod
     def _as_node(cls, obj):
-        return obj if isinstance(obj, cls) else ValueNode(obj)
+        return obj if isinstance(obj, Node) else ValueNode(obj)
 
     def __call__(self):
         return self._eval()
@@ -149,7 +152,7 @@ class Node:
         idx = self._last_idx
         if not idx:
             return True
-        for arg_node in self._args.values():
+        for arg_node in itertools.chain(self._args, self._kwargs.values()):
             if arg_node._last_idx > idx:
                 return True
         return False
@@ -189,6 +192,23 @@ class FuncNode(Node):
         # todo: How about RunFuncNode(FuncNode, SystemNode)?
         #       - increase the functionality by subclasses
 
+    def _add_args_kwargs(self, *args, **kwargs):
+        for obj in args:
+            node = self._as_node(obj)
+            self._args.append(node)
+        for name, obj in kwargs.items():
+            node = self._as_node(obj)
+            if not node._name:
+                node._name = f'{self._name}_arg_{name}'
+            self._kwargs[name] = node
+
+    def _register(self, tm):
+        Node._register(self, tm)
+        for node in itertools.chain(self._args, self._kwargs.values()):
+            node._register(tm)
+            tm.g.add_edge(node, self)
+        return self
+
     def run(self):
         self._tm.run(self)
         return self.table
@@ -197,7 +217,10 @@ class FuncNode(Node):
     def table(self):
         names = []
         nodes = []
-        for name, node in self._args.items():
+        for idx, node in enumerate(self._args):
+            names.append(f'arg_{idx}')
+            nodes.append(node)
+        for name, node in self._kwargs.items():
             names.append(name)
             nodes.append(node)
         names.append(self._name)
@@ -234,12 +257,12 @@ class StateNode(Node):
     def next_update(self):
         return self._set(self._next._get())
 
-    def add_next(self, func, **kwargs):
+    def add_next(self, func, *args, **kwargs):
         if self not in kwargs.values():
             kwargs[self._name] = self
         self._next._name = f'{self._name}_next'
         self._next._func = func
-        self._tm._add_kwargs(self._next, kwargs)
+        self._next._add_args_kwargs(*args, **kwargs)
         return self._next
 
 
@@ -266,8 +289,9 @@ class TaskManager:
         for n in nodes:
             if n._lazy and not n._has_new_args():
                 continue
-            kwargs = {name: node._get() for name, node in n._args.items()}
-            retval = n._func(**kwargs)
+            args = [node._get() for node in n._args]
+            kwargs = {name: node._get() for name, node in n._kwargs.items()}
+            retval = n._func(*args, **kwargs)
             n._set(retval)
         return node._get()
 
@@ -285,19 +309,12 @@ class TaskManager:
         self.state._add(node)
         return node
 
-    def add_func(self, func, **kwargs):
-        node = FuncNode(func)._register(self)
+    def add_func(self, func, *args, **kwargs):
+        node = FuncNode(func)
+        node._add_args_kwargs(*args, **kwargs)
+        node._register(self)
         self.func._add(node)
-        self._add_kwargs(node, kwargs)
         return node
-
-    def _add_kwargs(self, func_node, kwargs):
-        for name, obj in kwargs.items():
-            node = self._as_node(obj)
-            if not node._name:
-                node._name = f'{func_node._name}_arg_{name}'
-            self.g.add_edge(node, func_node)
-            func_node._args[name] = node
 
     def _as_node(self, obj):
         try:
@@ -417,6 +434,20 @@ class SystemNode(FuncNode):
         name = f'{self.__class__.__name__}({", ".join(argitems)})'
         super().__init__(retval._func, name)
 
+        # resolve names of (keyword-) arguments with nodes
+        for fnode in self._func_nodes:
+            params = inspect.signature(fnode._func).parameters
+            for name, param in params.items():
+                if (param.kind is inspect.Parameter.VAR_POSITIONAL or
+                    param.kind is inspect.Parameter.VAR_KEYWORD
+                ):
+                    continue
+                if name not in self._nodes:
+                    print(f'param {name!r} is not in nodes')
+                    continue
+                anode = self._nodes[name]
+                fnode._kwargs[name] = anode
+
     def add_subsys(self, system, name='', **kwargs):
         self._subsys.append(system)
         return system
@@ -425,20 +456,6 @@ class SystemNode(FuncNode):
         super()._register(tm)
         for node in self._nodes.values():
             node._register(tm)
-        # todo: put this into __init__ as much as possible
-        # todo: func_node._register(tm) should be enough!
-        for fnode in self._func_nodes:
-            params = inspect.signature(fnode._func).parameters
-            for name, param in params.items():
-                if (param.kind is inspect.Parameter.VAR_POSITIONAL or
-                    param.kind is inspect.Parameter.VAR_KEYWORD):
-                    continue
-                if name not in self._nodes:
-                    print(f'param {name!r} is not in nodes')
-                    continue
-                anode = self._nodes[name]
-                tm.g.add_edge(anode, fnode)
-                fnode._args[name] = anode
         return self
 
     def _show(self):
