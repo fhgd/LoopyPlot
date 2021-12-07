@@ -416,8 +416,11 @@ def zip_lazy(*args):
 class SystemNode(FuncNode):
     def __init__(self, *args, **kwargs):
         self._nodes = {}
-        self._states = []
-        self._subsys = []
+        self._states = TupleNode('states')
+        self._subsys = TupleNode('subsys')
+        self._nodes['states'] = self._states
+        self._nodes['subsys'] = self._subsys
+
         self._func_nodes = [self]
 
         inputs = []
