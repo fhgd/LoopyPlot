@@ -578,6 +578,7 @@ class CountingLoopNode(LoopNode):
     @state(init=0)
     def idx(idx):
         return idx + 1
+
     def is_running(self):
         return 0 <= self.idx < len(self) - 1
 
@@ -697,6 +698,23 @@ class ConcatSys(NestedSys):
     def __return__(subsys):
         idx, *loops = subsys
         return loops[idx - 1]
+
+
+class Task(LoopNode):
+    def __init__(self, func=None, name=''):
+        super().__init__()  # SystemNode.__init__()
+        self.add_return(func, name)
+        self.mainloop = self.add_subsys(LoopNode())
+
+    def is_running(self):
+        return self.mainloop.is_running()
+
+
+if 0:
+    def quad(x):
+        return x**2
+
+    q = Task(quad)._register(tm)
 
 
 class Nested:
