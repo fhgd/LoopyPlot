@@ -617,6 +617,21 @@ class Sequence(CountingLoopNode):
         return len(self.items)
 
 
+class ZipSys(LoopNode):
+    def __config__(self, *args, **kwargs):
+        self._subsys.extend(args)
+
+    @Function
+    def __return__(subsys):
+        return subsys
+
+    def is_running(self):
+        return all(loop.is_running() for loop in self._subsys)
+
+    def __len__(self):
+        return min(len(loop) for loop in self._subsys)
+
+
 class Nested:
     """Iterate over nested sweeps.
 
@@ -882,6 +897,8 @@ if 0:
     m1 = Sweep(2, 5)._register(tm)
     m2 = Sweep(15, 25, num=3)._register(tm)
 
+if 1:
+    z = ZipSys(x, g)._register(tm)
 
 
 class Signal(SystemNode):
