@@ -426,24 +426,25 @@ class SystemNode(FuncNode):
         inputs = []
         retval = Function(lambda: None, '__return__')
 
-        for name, attr in self.__class__.__dict__.items():
-            if isinstance(attr, InP):
-                inputs.append(attr)
-            elif isinstance(attr, Function):
-                if attr._name == '__return__':
-                    retval = attr
-                else:
-                    node = FuncNode(attr._func)
-                    self._nodes[attr._name] = node
-                    self._func_nodes.append(node)
-            elif isinstance(attr, State):
-                name = attr._name
-                node = StateNode(name, attr._init)
-                node._next._func = attr._func
-                node._next._name = f'{name}_next'
-                self._nodes[name] = node
-                self._func_nodes.append(node._next)
-                self._states.append(node)
+        for cls in reversed(self.__class__.mro()):
+            for name, attr in cls.__dict__.items():
+                if isinstance(attr, InP):
+                    inputs.append(attr)
+                elif isinstance(attr, Function):
+                    if attr._name == '__return__':
+                        retval = attr
+                    else:
+                        node = FuncNode(attr._func)
+                        self._nodes[attr._name] = node
+                        self._func_nodes.append(node)
+                elif isinstance(attr, State):
+                    name = attr._name
+                    node = StateNode(name, attr._init)
+                    node._next._func = attr._func
+                    node._next._name = f'{name}_next'
+                    self._nodes[name] = node
+                    self._func_nodes.append(node._next)
+                    self._states.append(node)
 
         inputs = sorted(inputs, key=lambda inp: inp._counter)
         for idx, inp in enumerate(inputs):
