@@ -535,12 +535,17 @@ class SystemNode(FuncNode):
         for subsys in self._subsys:
             subsys.reset()
 
-class BaseLoopNode(SystemNode):
+
+class LoopNode(SystemNode):
+    def is_running(self):
+        return False
+
     def _next(self):
         new_inputs = self._new_inputs()
         if not new_inputs:
             if self.is_running():
-                self._next_state()
+                #~ self._next_state()
+                self.update()
             else:
                 raise StopIteration
         return self._eval()
@@ -549,6 +554,11 @@ class BaseLoopNode(SystemNode):
 
     def __iter__(self):
         return self
+
+    def as_list(self):
+        self.reset()
+        return list(self)
+
 
     def is_running(self):
         return 0 <= self.idx < len(self) - 1
