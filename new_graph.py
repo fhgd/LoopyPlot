@@ -464,7 +464,7 @@ class SystemNode(FuncNode):
         argitems = [repr(value) for value in args]
         argitems += [f'{name}={val!r}' for name, val in kwargs.items()]
         name = f'{self.__class__.__name__}({", ".join(argitems)})'
-        super().__init__(retval._func, name)
+        self.add_return(retval._func, name)
 
         # resolve names of (keyword-) arguments with nodes
         for fnode in self._func_nodes:
@@ -479,6 +479,10 @@ class SystemNode(FuncNode):
                     continue
                 anode = self._nodes[name]
                 fnode._kwargs[name] = anode
+
+    def add_return(self, func=None, name=''):
+        FuncNode.__init__(self, func, name)
+        return self
 
     def add_subsys(self, system, name='', **kwargs):
         self._subsys.append(system)
