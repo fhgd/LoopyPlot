@@ -632,6 +632,33 @@ class Sequence(CountingLoopNode):
         return len(self.items)
 
 
+
+class GraphLoop(CountingLoopNode):
+    g = InP()
+    on_exit = InP()
+    on_enter = InP()
+
+    @Function
+    def path(g, on_exit, on_enter):
+        paths = nx.all_simple_edge_paths(g, on_exit, on_enter)
+        paths = list(paths)
+        path = min(paths, key=lambda p: len(p))  #, default=[])
+        return path
+
+    @Function
+    def __return__(path, idx):
+        p1, p2, pfunc = path[idx]
+        return pfunc
+
+    def __len__(self):
+        return len(self.path())
+
+    ## todo: or just use
+    ##      calc_path(g, on_enter) -> path
+    ##      Sequence(path)
+
+
+
 class ZipSys(LoopNode):
     def __config__(self, *args, **kwargs):
         self._subsys.extend(args)
