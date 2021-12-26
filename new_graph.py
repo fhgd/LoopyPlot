@@ -529,6 +529,11 @@ class SystemNode(FuncNode):
                 node._root._set(node._get())
         return self._eval()
 
+    def reset(self):
+        for state in self._states:
+            state.reset()
+        for subsys in self._subsys:
+            subsys.reset()
 
 class BaseLoopNode(SystemNode):
     def _next(self):
