@@ -560,19 +560,18 @@ class LoopNode(SystemNode):
         return list(self)
 
 
+class CountingLoopNode(LoopNode):
+    @state(init=0)
+    def idx(idx):
+        return idx + 1
     def is_running(self):
         return 0 <= self.idx < len(self) - 1
 
-    def reset(self):
-        for state in self._states:
-            state.reset()
-
-    def as_list(self):
-        self.reset()
-        return list(self)
+    def __len__(self):
+        return 1
 
 
-class Sweep(BaseLoopNode):
+class Sweep(CountingLoopNode):
     start = InP()
     stop  = InP()
     num   = InP(None)
@@ -591,10 +590,6 @@ class Sweep(BaseLoopNode):
             _num = num
         return SimpleNamespace(num=_num, step=_step)
 
-    @state(init=0)
-    def idx(idx):
-        return idx + 1
-
     @Function
     def __return__(idx, start, aux):
         return start + aux.step * idx
@@ -611,12 +606,8 @@ class Sweep(BaseLoopNode):
         return max(self.start, self.stop)
 
 
-class Sequence(BaseLoopNode):
+class Sequence(CountingLoopNode):
     items = InP()
-
-    @state(init=0)
-    def idx(idx):
-        return idx + 1
 
     @Function
     def __return__(idx, items):
