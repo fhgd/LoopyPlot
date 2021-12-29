@@ -170,10 +170,11 @@ class ValueNode(Node):
 
 
 class FuncNode(Node):
-    def __init__(self, func=None, name='', overwrite=False, lazy=True):
+    def __init__(self, func=None, name='', overwrite=False, lazy=True, mutable=False):
         name = name if name or not func else func.__name__
         Node.__init__(self, name, overwrite, lazy)
         self._sweep = Nested()
+        self._mutable = mutable
         self._func = func
         # todo: howto treat FuncNode args pointing to sweeps (SystemNode)?
         # todo: leave FuncNode as plain as possible, but is this a SystemNode?
@@ -191,6 +192,16 @@ class FuncNode(Node):
         #
         # todo: How about RunFuncNode(FuncNode, SystemNode)?
         #       - increase the functionality by subclasses
+
+    @property
+    def _mutable(self):
+        return self._overwrite and not self._lazy
+
+    @_mutable.setter
+    def _mutable(self, value):
+        if value:
+            self._overwrite = True
+            self._lazy = False
 
     def _add_args_kwargs(self, *args, **kwargs):
         for obj in args:
@@ -953,15 +964,14 @@ if 0:
 
 
 if 0:
-    # todo: idx node should have a flag for mutable datatype
+    # todo: idx node should have a flag for mutable datatype [x] ? [o]
     idx = ValueNode([0], name='idx')
 
     def value(start, step, idx):
         idx[0] += 1
         return start + idx[0] * step
     tm.add_func(value, start=100, step=11, idx=idx)
-    tm.func.value._overwrite = True
-    tm.func.value._lazy = False
+    tm.func.value._mutable = True
 
     tm.func.value._eval()
     tm.func.value._eval()
