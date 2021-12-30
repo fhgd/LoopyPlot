@@ -480,10 +480,14 @@ class SystemNode(FuncNode):
                 anode = self._nodes[name]
                 fnode._kwargs[name] = anode
 
+        self.__config__(*args, **kwargs)
+
+    def __config__(self, *args, **kwargs):
+        pass
+
     def add_return(self, func=None, name=''):
         FuncNode.__init__(self, func, name)
         return self
-
     def add_subsys(self, system, name='', **kwargs):
         self._subsys.append(system)
         return system
