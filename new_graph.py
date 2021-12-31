@@ -685,6 +685,20 @@ class NestedSys(LoopNode):
         return any(loops[idx].is_running() for idx in self.idxs())
 
 
+class ConcatSys(NestedSys):
+    def __config__(self, *args, **kwargs):
+        self.idx = self.add_subsys(Sweep(1, len(args)))
+        self._subsys.extend(args)
+
+    def idxs(self):
+        return [0, self.idx()]
+
+    @Function
+    def __return__(subsys):
+        idx, *loops = subsys
+        return loops[idx - 1]
+
+
 class Nested:
     """Iterate over nested sweeps.
 
@@ -953,6 +967,7 @@ if 1:
     x = Sweep(10, 20, step=5)._register(tm)
 
     n = NestedSys(g, h, x)._register(tm)
+    c = ConcatSys(x, g, h)._register(tm)
 
 if 0:
     m1 = Sweep(2, 5)._register(tm)
