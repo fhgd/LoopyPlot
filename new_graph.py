@@ -100,6 +100,9 @@ class Node:
         self.__tm = tm
         return self
 
+    def _has_tm(self):
+        return self.__tm is not None
+
     @classmethod
     def _as_node(cls, obj):
         return obj if isinstance(obj, Node) else ValueNode(obj)
@@ -217,7 +220,8 @@ class FuncNode(Node):
     def _register(self, tm):
         Node._register(self, tm)
         for node in itertools.chain(self._args, self._kwargs.values()):
-            node._register(tm)
+            if not node._has_tm():
+                node._register(tm)
             tm.g.add_edge(node, self)
         return self
 
