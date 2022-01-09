@@ -696,7 +696,7 @@ class NestedSys(LoopNode):
         n = len(idxs) - 1
         while not loops[idxs[n]].is_running():
             n -= 1
-        next_states = set(state._next for state in loops[idxs[n]]._states)
+        next_states = set(state._next for state in loops[idxs[n]]._iter_all_states())
         #~ print(f'{n=}')
         #~ print(f'{next_states =}')
         yield next_states
@@ -708,7 +708,7 @@ class NestedSys(LoopNode):
             #~ print(f'    {n = }')
             loop = loops[idxs[n]]
             if not loop.is_running():
-                init_states.update(state._init for state in loop._states)
+                init_states.update(state._init for state in loop._iter_all_states())
                 idxs = self.idxs()   # refresh loops due to possible new task
         #~ print(f'{init_states =}')
         yield init_states
