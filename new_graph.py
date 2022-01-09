@@ -733,10 +733,14 @@ class ConcatSys(NestedSys):
 
 
 class Task(LoopNode):
-    def __init__(self, func=None, name=''):
+    def __init__(self, func=None, name='', mainloop=None, *args, **kwargs):
         super().__init__()  # SystemNode.__init__()
         self.add_return(func, name)
-        self.mainloop = self.add_subsys(LoopNode())
+        self._add_args_kwargs(*args, **kwargs)
+        if mainloop is None:
+            mainloop = LoopNode()
+            #~ mainloop = Sweep(0, 1)
+        self.mainloop = self.add_subsys(mainloop)
 
     def is_running(self):
         return self.mainloop.is_running()
