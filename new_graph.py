@@ -950,29 +950,42 @@ if 0:
 
 if 0:
     def quad(x):
+        print('eval quad')
         return x**2
     x1 = Sweep(10, 20, step=5)
     t1 = Task(quad, mainloop=x1, x=x1)._register(tm)
 
 
     def double(x):
+        print('eval double')
         return 2*x
     x2 = Sequence([1, 2])
     t2 = Task(double, mainloop=x2, x=x2)._register(tm)
 
 
     def my():
+        print('eval my')
         return 321
     t21 = Task(my)._register(tm)
 
 
     def countdown(x):
+        print('eval countdown')
         return x
-    x3 = Sequence([3, 2, 1])
+    x3 = Sequence(['3-2-1-0'])
     t3 = Task(countdown, mainloop=x3, x=x3)._register(tm)
 
     tp3 = TaskProgram(t1, t2, t21, t3)._register(tm)
     tp31 = TaskProgram(t21)._register(tm)
+    tp32 = TaskProgram()._register(tm)
+
+    # test: tp3.as_list()
+    # should be:
+    #   quad, quad, quad,
+    #   double, double,
+    #   my,
+    #   countdown
+
 
 if 0:
     def quad(x, gain=1, offs=0):
