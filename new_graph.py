@@ -278,14 +278,14 @@ class TupleNode(FuncNode):
 class StateNode(Node):
     def __init__(self, name, init=0):
         Node.__init__(self, name)
-        self._init = ValueNode(init)
-        self._init._root = self
         self._next = FuncNode(lambda x: x, overwrite=True)
         self._next._root = self
+        self._init = ValueNode(init, name=f'{name}_init')
+        self._init._root = self
 
     def _register(self, tm):
         Node._register(self, tm)
-        Node._register(self._next, tm)
+        self._next._register(tm)
         self._init._register(tm)
         if not self._has_results() or self._get() != self._init._get():
             self.reset()
