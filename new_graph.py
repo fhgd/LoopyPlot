@@ -145,7 +145,7 @@ class Node:
         return idx == 0 or self._last_idx > idx
 
     def _has_results(self):
-        return self._key in self._tm.dm._data
+        return self in self._tm.dm
 
     def _has_new_args(self):
         dm = self._tm.dm
@@ -165,7 +165,8 @@ class ValueNode(Node):
 
     def _register(self, tm):
         Node._register(self, tm)
-        self._set(self._value)
+        if not self._has_results() or self._get() != self._value:
+            self._set(self._value)
         return self
 
 
@@ -282,13 +283,17 @@ class StateNode(Node):
         Node._register(self, tm)
         Node._register(self._next, tm)
         self._init._register(tm)
-        self.reset()
+        if not self._has_results() or self._get() != self._init._get():
+            self.reset()
         return self
 
     def reset(self):
         init = self._init._get()
-        if self not in self._tm.dm or self._get() != init:
-            self._set(init)
+        self._set(init)
+        # reset needs to 'update' the state in dm
+        # in order to trigger _new_inputs()
+        #~ if self not in self._tm.dm or self._get() != init:
+            #~ self._set(init)
 
     def next_eval(self):
         return self._next._eval()
