@@ -114,12 +114,10 @@ class Node:
             return ValueNode(obj)
 
     def __call__(self):
-        return self._eval()
+        return self._get()
 
-    def _eval(self):
-        return self._tm.eval(self)
-
-    #todo: add empty __eval__()
+    def __eval__(self):
+        return
 
     def _get(self):
         return self._tm.dm.read(self._key)
@@ -207,6 +205,20 @@ class FuncNode(Node):
         #
         # todo: How about RunFuncNode(FuncNode, SystemNode)?
         #       - increase the functionality by subclasses
+
+    def __eval__(self):
+        if not self._lazy or self._has_new_args():
+            args = [node._get() for node in self._args]
+            kwargs = {name: node._get() for name, node in self._kwargs.items()}
+            retval = self._func(*args, **kwargs)
+            self._set(retval)
+
+    def __call__(self):
+        _g = self._tm.g.reverse(copy=False)
+        nodes = nx.algorithms.dfs_postorder_nodes(_g, self)
+        for n in nodes:
+            n.__eval__()
+        return self._get()
 
     @property
     def _mutable(self):
@@ -312,7 +324,7 @@ class StateNode(Node):
             #~ self._set(init)
 
     def next_eval(self):
-        return self._next._eval()
+        return self._next()
 
     def next_update(self):
         return self._set(self._next._get())
@@ -346,17 +358,8 @@ class TaskManager:
         self.func = Container()
         self.state = Container()
 
-    def eval(self, node, lazy=None):
-        _g = self.g.reverse(copy=False)
-        nodes = nx.algorithms.dfs_postorder_nodes(_g, node)
-        for n in nodes:
-            if n._lazy and not n._has_new_args():
-                continue
-            args = [node._get() for node in n._args]
-            kwargs = {name: node._get() for name, node in n._kwargs.items()}
-            retval = n._func(*args, **kwargs)
-            n._set(retval)
-        return node._get()
+    def eval(self, node):
+        return node()
 
     def run(self, fn):
         while 1:
@@ -578,10 +581,10 @@ class SystemNode:
         for nodes in self._next_updates():
             #~ print(f'nodes for update: {nodes}')
             for node in nodes:
-                node._eval()
+                node()
             for node in nodes:
                 node._root._set(node._get())
-        return self.__node__()._eval()
+        return self.__node__().__call__()
 
     def reset(self):
         for state in self._states:
