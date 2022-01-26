@@ -74,16 +74,13 @@ class DataManager:
 class Node:
     __count__ = 0
 
-    def __init__(self, name='', overwrite=False, lazy=True):
+    def __init__(self, name='', overwrite=False):
         # todo: underscore all attributes
         self._name = name
         self._overwrite = overwrite
-        self._lazy = lazy
         self._id = Node.__count__
         Node.__count__ += 1
         self._key = f'n{self._id}'
-        self._kwargs = {}  # {arg_name: arg_node}
-        self._args = []    # [arg_node]
         self._root = None
         # set by _register(tm)
         self.__tm = None
@@ -159,16 +156,6 @@ class Node:
     def _has_results(self):
         return self in self._tm.dm
 
-    def _has_new_args(self):
-        dm = self._tm.dm
-        idx = self._last_idx
-        if not idx:
-            return True
-        for arg_node in itertools.chain(self._args, self._kwargs.values()):
-            if arg_node._last_idx > idx:
-                return True
-        return False
-
 
 class ValueNode(Node):
     def __init__(self, value=NOTHING, name=''):
@@ -185,10 +172,13 @@ class ValueNode(Node):
 class FuncNode(Node):
     def __init__(self, func=None, name='', overwrite=False, lazy=True, mutable=False):
         name = name if name or not func else func.__name__
-        Node.__init__(self, name, overwrite, lazy)
+        Node.__init__(self, name, overwrite)
+        self._lazy = lazy
         self._sweep = Nested()
         self._mutable = mutable
         self._func = func
+        self._kwargs = {}  # {arg_name: arg_node}
+        self._args = []    # [arg_node]
         # todo: howto treat FuncNode args pointing to sweeps (SystemNode)?
         # todo: leave FuncNode as plain as possible, but is this a SystemNode?
         # todo: if yes, then move ._sweep, .run(), .table() into SystemNode
@@ -205,6 +195,16 @@ class FuncNode(Node):
         #
         # todo: How about RunFuncNode(FuncNode, SystemNode)?
         #       - increase the functionality by subclasses
+
+    def _has_new_args(self):
+        dm = self._tm.dm
+        idx = self._last_idx
+        if not idx:
+            return True
+        for arg_node in itertools.chain(self._args, self._kwargs.values()):
+            if arg_node._last_idx > idx:
+                return True
+        return False
 
     def __eval__(self):
         if not self._lazy or self._has_new_args():
