@@ -72,14 +72,15 @@ class DataManager:
 
 
 class Node:
-    __count__ = 0
+    __nodes__ = []
+    # todo: __dm__ = DataManager()
 
     def __init__(self, name='', overwrite=False):
         # todo: underscore all attributes
         self._name = name
         self._overwrite = overwrite
-        self._id = Node.__count__
-        Node.__count__ += 1
+        self._id = len(Node.__nodes__)
+        Node.__nodes__.append(self)
         self._key = f'n{self._id}'
         self._root = None
         # set by _register(tm)
@@ -211,7 +212,7 @@ class FuncNode(Node):
         # Based on http://www.ics.uci.edu/~eppstein/PADS/DFS.py
         # by D. Eppstein, July 2004.
         start = self
-        depth_limit = start.__count__
+        depth_limit = len(start.__nodes__)
         visited = set()
 
         needs_eval = set()
