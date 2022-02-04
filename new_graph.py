@@ -133,7 +133,12 @@ class Node:
         return self._tm.dm.last_idx(self._key)
 
     def __repr__(self):
-        return f'n{self._id}_{self._name}' if self._name else f'n{self._id}'
+        names = [f'n{self._id}']
+        if self._name:
+            names.append(self._name)
+        if self._root is not None:
+            names.append(repr(self._root))
+        return '_'.join(names)
 
     def _inputs(self):
         g = self._tm.g
@@ -258,8 +263,9 @@ class TupleNode(FuncNode):
     def __return__(*args):
         return args
 
-    def __init__(self, name, *args):
+    def __init__(self, name, root=None, *args):
         super().__init__(self.__return__, name)
+        self._root = root
         self._add_args_kwargs(*args)
 
     def append(self, obj):
@@ -286,7 +292,7 @@ class StateNode(Node):
         Node.__init__(self, name)
         self._next = FuncNode(lambda x: x, overwrite=True)
         self._next._root = self
-        self._init = ValueNode(init, name=f'{name}_init')
+        self._init = ValueNode(init, 'init')
         self._init._root = self
 
     def _register(self, tm):
@@ -312,9 +318,9 @@ class StateNode(Node):
         return self._set(self._next._get())
 
     def add_next(self, func, *args, **kwargs):
-        self._next._name = f'{self._name}_next'
         #~ if self not in kwargs.values():
             #~ kwargs[self._name] = self
+        self._next._name = 'next'
         self._next._func = func
         self._next._add_args_kwargs(*args, **kwargs)
         return self._next
@@ -449,8 +455,8 @@ class SystemNode:
         self._name = f'{self.__class__.__name__}({", ".join(argitems)})'
 
         self._nodes = {}
-        self._states = TupleNode('states')
-        self._subsys = TupleNode('subsys')
+        self._states = TupleNode('states', root=self)
+        self._subsys = TupleNode('subsys', root=self)
         self._nodes['states'] = self._states
         self._nodes['subsys'] = self._subsys
 
@@ -462,11 +468,13 @@ class SystemNode:
                     inputs.append(attr)
                 elif isinstance(attr, Function):
                     node = FuncNode(attr._func)
+                    node._root = self
                     self._nodes[attr._name] = node
                     func_nodes.append(node)
                 elif isinstance(attr, State):
                     name = attr._name
                     node = StateNode(name, attr._init)
+                    node._root = self
                     node.add_next(attr._func)
                     self._nodes[name] = node
                     self._states.append(node)
