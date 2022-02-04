@@ -103,9 +103,15 @@ class Node:
     def _has_tm(self):
         return self.__tm is not None
 
+    def __node__(self):
+        return self
+
     @classmethod
     def _as_node(cls, obj):
-        return obj if isinstance(obj, Node) else ValueNode(obj)
+        try:
+           return obj.__node__()
+        except AttributeError:
+            return ValueNode(obj)
 
     def __call__(self):
         return self._eval()
