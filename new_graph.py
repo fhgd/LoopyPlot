@@ -312,9 +312,9 @@ class StateNode(Node):
         return self._set(self._next._get())
 
     def add_next(self, func, *args, **kwargs):
-        if self not in kwargs.values():
-            kwargs[self._name] = self
         self._next._name = f'{self._name}_next'
+        #~ if self not in kwargs.values():
+            #~ kwargs[self._name] = self
         self._next._func = func
         self._next._add_args_kwargs(*args, **kwargs)
         return self._next
@@ -442,39 +442,37 @@ def zip_lazy(*args):
         yield tuple(values)
 
 
-class SystemNode(FuncNode):
+class SystemNode:
     def __init__(self, *args, **kwargs):
+        argitems = [repr(value) for value in args]
+        argitems += [f'{name}={val!r}' for name, val in kwargs.items()]
+        self._name = f'{self.__class__.__name__}({", ".join(argitems)})'
+
         self._nodes = {}
         self._states = TupleNode('states')
         self._subsys = TupleNode('subsys')
         self._nodes['states'] = self._states
         self._nodes['subsys'] = self._subsys
 
-        self._func_nodes = [self]
-
         inputs = []
-        retval = Function(lambda: None, '__return__')
-
+        func_nodes = []
         for cls in reversed(self.__class__.mro()):
             for name, attr in cls.__dict__.items():
                 if isinstance(attr, InP):
                     inputs.append(attr)
                 elif isinstance(attr, Function):
-                    if attr._name == '__return__':
-                        retval = attr
-                    else:
-                        node = FuncNode(attr._func)
-                        self._nodes[attr._name] = node
-                        self._func_nodes.append(node)
+                    node = FuncNode(attr._func)
+                    self._nodes[attr._name] = node
+                    func_nodes.append(node)
                 elif isinstance(attr, State):
                     name = attr._name
                     node = StateNode(name, attr._init)
-                    node._next._func = attr._func
-                    node._next._name = f'{name}_next'
+                    node.add_next(attr._func)
                     self._nodes[name] = node
-                    self._func_nodes.append(node._next)
                     self._states.append(node)
+                    func_nodes.append(node._next)
 
+        # resolve inputs to __init__(*args, **kwargs)
         inputs = sorted(inputs, key=lambda inp: inp._counter)
         for idx, inp in enumerate(inputs):
             name = inp._name
@@ -487,16 +485,14 @@ class SystemNode(FuncNode):
                 msg = f'provide value for input argument {name!r}'
                 raise ValueError(msg)
             node = Node._as_node(value)
-            node._name = f'arg_{name}'
             self._nodes[name] = node
+            if not node._name:
+                node._name = f'{self.__class__.__name__}_arg_{name}'
 
-        argitems = [repr(value) for value in args]
-        argitems += [f'{name}={val!r}' for name, val in kwargs.items()]
-        name = f'{self.__class__.__name__}({", ".join(argitems)})'
-        self.add_return(retval._func, name)
+        self.__config__(*args, **kwargs)
 
         # resolve names of (keyword-) arguments with nodes
-        for fnode in self._func_nodes:
+        for fnode in func_nodes:
             params = inspect.signature(fnode._func).parameters
             for name, param in params.items():
                 if (param.kind is inspect.Parameter.VAR_POSITIONAL or
@@ -509,20 +505,36 @@ class SystemNode(FuncNode):
                 anode = self._nodes[name]
                 fnode._kwargs[name] = anode
 
-        self.__config__(*args, **kwargs)
-
     def __config__(self, *args, **kwargs):
         pass
 
-    def add_return(self, func=None, name=''):
-        FuncNode.__init__(self, func, name)
-        return self
+    def __node__(self):
+        try:
+            return self._nodes.get('__return__')
+        except KeyError:
+            return ValueNode(None, name=self.__class__.__name__)
+
+    def _get(self):
+        return self.__node__()._get()
+
+    def __call__(self, *args, **kwargs):
+        return self.__node__().__call__(*args, **kwargs)
+
+    def __repr__(self):
+        return self._name
+
+    def set_return(self, node, *args, **kwargs):
+        node = node.__node__()
+        if isinstance(node, FuncNode):
+            node._add_args_kwargs(*args, **kwargs)
+        node._root = self
+        self._nodes['__return__'] = node
+
     def add_subsys(self, system, name='', **kwargs):
         self._subsys.append(system)
         return system
 
     def _register(self, tm):
-        super()._register(tm)
         for node in self._nodes.values():
             node._register(tm)
         return self
@@ -556,7 +568,7 @@ class SystemNode(FuncNode):
                 node._eval()
             for node in nodes:
                 node._root._set(node._get())
-        return self._eval()
+        return self.__node__()._eval()
 
     def reset(self):
         for state in self._states:
@@ -570,15 +582,15 @@ class LoopNode(SystemNode):
         return False
 
     def _next(self):
-        new_inputs = self._new_inputs()
+        new_inputs = self.__node__()._new_inputs()
         #~ if not new_inputs:
-        if not new_inputs and self._has_results():
+        if not new_inputs and self.__node__()._has_results():
             if self.is_running():
                 #~ self._next_state()
                 self.update()
             else:
                 raise StopIteration
-        return self._eval()
+        return self.__node__().__call__()
 
     __next__ = _next
 
@@ -841,7 +853,7 @@ class Nested:
             sweep.reset()
 
     def value(self):
-        return tuple(s._eval() for s in self.sweeps)
+        return tuple(s.__node__()._eval() for s in self.sweeps)
 
     def is_running(self):
         return any(s.is_running() for s in self.sweeps)
@@ -861,7 +873,7 @@ class Nested:
     def next(self):
         new_inputs = []
         for sweep in self.sweeps:
-            new_inputs += sweep._new_inputs()
+            new_inputs += sweep.__node__()._new_inputs()
         if not new_inputs:
             if self.is_running():
                 self._next_state()
