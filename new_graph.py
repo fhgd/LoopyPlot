@@ -403,7 +403,7 @@ class InP:
         self._name = name
 
     def __get__(self, obj, cls=None):
-        return obj._nodes.get(self._name, self._default)._eval()
+        return obj._nodes.get(self._name, self._default).__call__()  # value
 
 
 class Function:
@@ -412,7 +412,7 @@ class Function:
         self._func = func
 
     def __get__(self, obj, cls=None):
-        return obj._nodes.get(self._name, self._func)
+        return obj._nodes.get(self._name, self._func)  # plain node
 
 
 class State:
@@ -422,7 +422,10 @@ class State:
         self._func = func
 
     def __get__(self, obj, cls=None):
-        return obj._nodes.get(self._name, self._init)._get()
+        return obj._nodes.get(self._name, self._init)._get()  # value
+
+    def __set__(self, obj, value):
+        obj._nodes.get(self._name)._set(value)
 
 
 def state(func=None, init=0):
