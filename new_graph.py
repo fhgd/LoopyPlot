@@ -765,17 +765,26 @@ class NestedSys(LoopNode):
 
 
 class ConcatSys(NestedSys):
-    def __config__(self, *args, **kwargs):
-        self.idx = self.add_subsys(Sweep(1, len(args)))
-        self._subsys.extend(args)
+    def __config__(self, *loops):
+        self.add_subsys(Sweep(0, len(loops) - 1))
+        for loop in loops:
+            self.add_subsys(loop)
+        self._nodes['__return__'] = FuncNode(lambda i, v: v, name='__return__')
+        self._nodes['__return__']._iter_children = self.__return__children
+
+    def __return__children(self):
+        idx = self._subsys[0]._nodes['idx']
+        yield idx, ''
+        yield self._subsys[idx._get() + 1].__node__(), ''
 
     def idxs(self):
-        return [0, self.idx()]
+        idx = self._subsys[0].idx
+        return [0, idx + 1]
 
-    @Function
-    def __return__(subsys):
-        idx, *loops = subsys
-        return loops[idx - 1]
+    def _register(self, tm):
+        super()._register(tm)
+        self._subsys[0]._register(tm)
+        return self
 
 
 # todo: TaskManager / TaskSequence / TaskProgram
@@ -988,7 +997,7 @@ if 0:
     t0 = Task(my)._register(tm)
 
 
-if 1:
+if 0:
     def quad(x, gain=1, offs=0):
         return gain * x**2 + offs
 
@@ -1154,14 +1163,14 @@ if 0:
     # 5  20    10     0     200
 
 
-if 0:
+if 1:
     g = Sequence([3, 5])._register(tm)
     h = Sequence([127, 255])._register(tm)
     x = Sweep(10, 20, step=5)._register(tm)
 
     n = NestedSys(g, h, x)._register(tm)
     c = ConcatSys(x, g, h)._register(tm)
-    tp = TaskProgram(x, g, h)._register(tm)
+    #~ tp = TaskProgram(x, g, h)._register(tm)
 
 
 if 0:
