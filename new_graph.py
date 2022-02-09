@@ -301,35 +301,6 @@ class FuncNode(Node):
         return df
 
 
-class TupleNode(FuncNode):
-    @staticmethod
-    def __return__(*args):
-        return args
-
-    def __init__(self, name, root=None, *args):
-        super().__init__(self.__return__, name)
-        self._root = root
-        self._add_args_kwargs(*args)
-
-    def append(self, obj):
-        self._add_args_kwargs(obj)
-
-    def extend(self, items):
-        self._add_args_kwargs(*items)
-
-    def __iter__(self):
-        return iter(self._args)
-
-    def __reversed__(self):
-        return reversed(self._args)
-
-    def __len__(self):
-        return len(self._args)
-
-    def __getitem__(self, idx):
-        return self._args[idx]
-
-
 class StateNode(Node):
     def __init__(self, name, init=0):
         Node.__init__(self, name)
@@ -493,10 +464,8 @@ class SystemNode:
         self._root = kwargs.get('root', None)
 
         self._nodes = {}
-        self._states = TupleNode('states', root=self)
-        self._subsys = TupleNode('subsys', root=self)
-        self._nodes['states'] = self._states
-        self._nodes['subsys'] = self._subsys
+        self._states = []
+        self._subsys = []
 
         inputs = []
         func_nodes = []
@@ -754,11 +723,11 @@ class ZipSys(LoopNode):
 
 
 class NestedSys(LoopNode):
-    def __config__(self, *args, **kwargs):
+    def __config__(self, *args):
         self._subsys.extend(args)
+        self.set_return(FuncNode(self.__return__), *args)
 
-    @Function
-    def __return__(subsys):
+    def __return__(self, *subsys):
         return subsys
 
     def idxs(self):
