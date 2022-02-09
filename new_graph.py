@@ -85,6 +85,7 @@ class Node:
         self._root = None
         # set by _register(tm)
         self.__tm = None
+        self._iter_children = list().__iter__
 
     @property
     def _tm(self):
@@ -124,9 +125,6 @@ class Node:
         self._tm.dm.write(self._key, value, self._overwrite)
         return value
 
-    def _children(self):
-        yield from []
-
     @property
     def _last_idx(self):
         return self._tm.dm.last_idx(self._key)
@@ -163,8 +161,8 @@ class FuncNode(Node):
         self._sweep = Nested()
         self._mutable = mutable
         self._func = func
-        self._kwargs = {}  # {arg_name: arg_node}
-        self._args = []    # [arg_node]
+        self._children = []  # [(arg_node, kwarg_name), ...]
+        self._iter_children = self._children.__iter__
         # todo: howto treat FuncNode args pointing to sweeps (SystemNode)?
         # todo: leave FuncNode as plain as possible, but is this a SystemNode?
         # todo: if yes, then move ._sweep, .run(), .table() into SystemNode
@@ -182,10 +180,6 @@ class FuncNode(Node):
         # todo: How about RunFuncNode(FuncNode, SystemNode)?
         #       - increase the functionality by subclasses
 
-    def _children(self):
-        yield from self._args
-        yield from self._kwargs.values()
-
     def __call__(self, nodes=None):
         if nodes is None:
             nodes = self._dep_nodes()
@@ -196,8 +190,14 @@ class FuncNode(Node):
 
     def __eval__(self):
         # todo: this should be in a Upper-Class like DependencyNode(Node)
-        args = [n._get() for n in self._args]
-        kwargs = {name: n._get() for name, n in self._kwargs.items()}
+        args = []
+        kwargs = {}
+        for node, name in self._iter_children():
+            value = node._get()
+            if name:
+                kwargs[name] = value
+            else:
+                args.append(value)
         retval = self._func(*args, **kwargs)
         self._set(retval)
 
@@ -220,18 +220,18 @@ class FuncNode(Node):
 
         #~ yield start, start, "forward"
         visited.add(start)
-        stack = [(start, depth_limit, iter(start._children()))]
-        #~ print(f'    {start}: {list(start._children())}')
+        stack = [(start, depth_limit, start._iter_children())]
+        #~ print(f'    {start}: {list(start._iter_children())}')
         while stack:
             parent, depth_now, children = stack[-1]
             try:
-                child = next(children)
+                child, _ = next(children)
                 if child not in visited:
                     #~ yield parent, child, "forward"
                     visited.add(child)
                     if depth_now > 1:
-                        stack.append((child, depth_now - 1, iter(child._children())))
-                        #~ print(f'    {child}: {list(child._children())}')
+                        stack.append((child, depth_now - 1, child._iter_children()))
+                        #~ print(f'    {child}: {list(child._iter_children())}')
                 #~ else:
                     #~ yield parent, child, "nontree"
             except StopIteration:
@@ -263,17 +263,18 @@ class FuncNode(Node):
 
     def _add_args_kwargs(self, *args, **kwargs):
         for obj in args:
-            node = self._as_node(obj)
-            self._args.append(node)
+            child = self._as_node(obj), None
+            self._children.append(child)
         for name, obj in kwargs.items():
             node = self._as_node(obj)
             if not node._name:
                 node._name = f'{self._name}_arg_{name}'
-            self._kwargs[name] = node
+            child = node, name
+            self._children.append(child)
 
     def _register(self, tm):
         Node._register(self, tm)
-        for node in itertools.chain(self._args, self._kwargs.values()):
+        for node, name in self._iter_children():
             if not node._has_tm():
                 node._register(tm)
             tm.g.add_edge(node, self)
@@ -287,11 +288,11 @@ class FuncNode(Node):
     def table(self):
         names = []
         nodes = []
-        for idx, node in enumerate(self._args):
-            names.append(f'arg_{idx}')
-            nodes.append(node)
-        for name, node in self._kwargs.items():
-            names.append(name)
+        for idx, (node, name) in enumerate(self._iter_children()):
+            if name:
+                names.append(name)
+            else:
+                names.append(f'arg_{idx}')
             nodes.append(node)
         names.append(self._name)
         nodes.append(self)
@@ -518,7 +519,7 @@ class SystemNode:
                     print(f'param {name!r} is not in nodes')
                     continue
                 anode = self._nodes[name]
-                fnode._kwargs[name] = anode
+                fnode._add_args_kwargs(**{name: anode})
 
     def __config__(self, *args, **kwargs):
         pass
