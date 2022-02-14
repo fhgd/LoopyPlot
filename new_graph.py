@@ -453,6 +453,7 @@ class SystemNode:
         argitems = [repr(value) for value in args]
         argitems += [f'{name}={val!r}' for name, val in kwargs.items()]
         self._name = f'{self.__class__.__name__}({", ".join(argitems)})'
+        self._root = kwargs.get('root', None)
 
         self._nodes = {}
         self._states = TupleNode('states', root=self)
@@ -540,6 +541,7 @@ class SystemNode:
 
     def add_subsys(self, system, name='', **kwargs):
         self._subsys.append(system)
+        system._root = self
         return system
 
     def _register(self, tm):
