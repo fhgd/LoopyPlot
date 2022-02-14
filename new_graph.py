@@ -211,8 +211,6 @@ class FuncNode(Node):
         # Based on http://www.ics.uci.edu/~eppstein/PADS/DFS.py
         # by D. Eppstein, July 2004.
         start = self
-        idx = start._last_idx
-
         depth_limit = start.__count__
         visited = set()
 
@@ -244,7 +242,7 @@ class FuncNode(Node):
                     if parent in needs_eval or parent._needs_eval():
                         nodes.append(parent)
                         needs_eval.add(grandpar)
-                    elif parent._last_idx > idx:
+                    elif parent._last_idx > grandpar._last_idx:
                         #~ print(f'            is new')
                         needs_eval.add(grandpar)
         #~ yield start, start, "reverse"
