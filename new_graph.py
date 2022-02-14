@@ -113,8 +113,8 @@ class Node:
     def __call__(self):
         return self._get()
 
-    def __eval__(self):
-        return
+    def _needs_eval(self):
+        return False
 
     def _get(self):
         return self._tm.dm.read(self._key)
@@ -122,6 +122,9 @@ class Node:
     def _set(self, value):
         self._tm.dm.write(self._key, value, self._overwrite)
         return value
+
+    def _children(self):
+        yield from []
 
     @property
     def _last_idx(self):
@@ -134,24 +137,6 @@ class Node:
         if self._root is not None:
             names.append(repr(self._root))
         return '_'.join(names)
-
-    def _inputs(self):
-        g = self._tm.g
-        nodes = nx.shortest_path_length(g, target=self)
-        #~ nodes = nx.single_source_shortest_path_length(g.reverse(copy=False), self)
-        return {n: nodes[n] for n, d in g.in_degree(nodes) if d == 0}
-
-    def _new_inputs(self):
-        dm = self._tm.dm
-        idx = self._last_idx
-        inps = {}
-        for n, d in self._inputs().items():
-            if n._last_idx > idx:
-                inps[n] = d
-        return inps
-
-    def _is_new(self, idx):
-        return idx == 0 or self._last_idx > idx
 
     def _has_results(self):
         return self in self._tm.dm
@@ -196,29 +181,76 @@ class FuncNode(Node):
         # todo: How about RunFuncNode(FuncNode, SystemNode)?
         #       - increase the functionality by subclasses
 
-    def _has_new_args(self):
-        dm = self._tm.dm
-        idx = self._last_idx
-        if not idx:
-            return True
-        for arg_node in itertools.chain(self._args, self._kwargs.values()):
-            if arg_node._last_idx > idx:
-                return True
-        return False
+    def _children(self):
+        yield from self._args
+        yield from self._kwargs.values()
+
+    def __call__(self, nodes=None):
+        if nodes is None:
+            nodes = self._dep_nodes()
+        for node in nodes:
+            print(f'    eval {node}')
+            node.__eval__()
+        return self._get()
 
     def __eval__(self):
-        if not self._lazy or self._has_new_args():
-            args = [node._get() for node in self._args]
-            kwargs = {name: node._get() for name, node in self._kwargs.items()}
-            retval = self._func(*args, **kwargs)
-            self._set(retval)
+        # todo: this should be in a Upper-Class like DependencyNode(Node)
+        args = [n._get() for n in self._args]
+        kwargs = {name: n._get() for name, n in self._kwargs.items()}
+        retval = self._func(*args, **kwargs)
+        self._set(retval)
 
-    def __call__(self):
-        _g = self._tm.g.reverse(copy=False)
-        nodes = nx.algorithms.dfs_postorder_nodes(_g, self)
-        for n in nodes:
-            n.__eval__()
-        return self._get()
+    def _needs_eval(self):
+        return not self._has_results() or not self._lazy
+
+    def _dep_nodes(self):
+        """Return depending nodes needs to be evaluated from a depth-first-search."""
+        # Based on copy from dfs_labeled_edges(G, source=None, depth_limit=None)
+        # in networkx/algorithms/traversal/depth_first_search.py
+
+        # Based on http://www.ics.uci.edu/~eppstein/PADS/DFS.py
+        # by D. Eppstein, July 2004.
+        start = self
+        idx = start._last_idx
+
+        depth_limit = start.__count__
+        visited = set()
+
+        needs_eval = set()
+        nodes = []
+
+        #~ yield start, start, "forward"
+        visited.add(start)
+        stack = [(start, depth_limit, iter(start._children()))]
+        #~ print(f'    {start}: {list(start._children())}')
+        while stack:
+            parent, depth_now, children = stack[-1]
+            try:
+                child = next(children)
+                if child not in visited:
+                    #~ yield parent, child, "forward"
+                    visited.add(child)
+                    if depth_now > 1:
+                        stack.append((child, depth_now - 1, iter(child._children())))
+                        #~ print(f'    {child}: {list(child._children())}')
+                #~ else:
+                    #~ yield parent, child, "nontree"
+            except StopIteration:
+                stack.pop()
+                if stack:
+                    #~ yield stack[-1][0], parent, "reverse"
+                    grandpar = stack[-1][0]
+                    #~ print(f'        ??? {parent}:  {parent._last_idx=}  {idx=}')
+                    if parent in needs_eval or parent._needs_eval():
+                        nodes.append(parent)
+                        needs_eval.add(grandpar)
+                    elif parent._last_idx > idx:
+                        #~ print(f'            is new')
+                        needs_eval.add(grandpar)
+        #~ yield start, start, "reverse"
+        if start in needs_eval or start._needs_eval():
+            nodes.append(start)
+        return nodes
 
     @property
     def _mutable(self):
@@ -598,15 +630,15 @@ class LoopNode(SystemNode):
         return False
 
     def _next(self):
-        new_inputs = self.__node__()._new_inputs()
-        #~ if not new_inputs:
-        if not new_inputs and self.__node__()._has_results():
+        nodes = self.__node__()._dep_nodes()
+        if not nodes:
             if self.is_running():
                 #~ self._next_state()
                 self.update()
+                nodes = self.__node__()._dep_nodes()
             else:
                 raise StopIteration
-        return self.__node__().__call__()
+        return self.__node__().__call__(nodes)
 
     __next__ = _next
 
@@ -981,6 +1013,22 @@ if 0:
     t0 = Task(my)._register(tm)
 
 
+if 1:
+    def quad(x, gain=1, offs=0):
+        return gain * x**2 + offs
+
+    gain = Sequence([1, 2, 5])._register(tm)
+    x = Sweep(0, 10, step=gain)._register(tm)
+
+    import random
+    def offs_factory():
+        return random.random()
+    offs = FuncNode(offs_factory, lazy=False)._register(tm)
+
+
+    fn = FuncNode(quad)
+    fn._add_args_kwargs(x=x, gain=gain, offs=offs)
+    fn._register(tm)
 
 if 0:
     def quad(x):
