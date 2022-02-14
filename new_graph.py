@@ -790,20 +790,36 @@ class ConcatSys(NestedSys):
 # todo: TaskManager / TaskSequence / TaskProgram
 #           Nested(tasks, task_loop, graph_loop)
 class TaskProgram(NestedSys):
-    def __config__(self, *args, **kwargs):
-        self.idx = self.add_subsys(Sweep(2, len(args) + 1))
-        #~ self.glp = self.add_subsys(Sequence('AbC'))
-        self.glp = self.add_subsys(LoopNode())
-        #~ self.glp = self.add_subsys(GraphLoop(g, on_exit, on_enter))
-        self._subsys.extend(args)
+    def __config__(self, *tasks):
+        self.add_subsys(Sweep(0, len(tasks) - 1))  # idx
+
+        self.add_subsys(Sequence('AbC'))  # glp
+        #~ self.add_subsys(LoopNode())
+        #~ self.add_subsys(GraphLoop(g, on_exit, on_enter))
+
+        for task in tasks:
+            self.add_subsys(task)
+        self._nodes['__return__'] = FuncNode(self.__return__)
+        self._nodes['__return__']._iter_children = self.__return__children
+
+    def __return__(self, idx, n1, n2):
+        return n1, n2
+
+    def __return__children(self):
+        idx = self._subsys[0]._nodes['idx']
+        yield idx, ''
+        yield self._subsys[idx._get() + 2].__node__(), ''
+        yield self._subsys[1].__node__(), ''
 
     def idxs(self):
-        return [0, self.idx(), 1]
+        idx = self._subsys[0].idx
+        return [0, idx + 2, 1]
 
-    @Function
-    def __return__(subsys):
-        idx, glp, *tasks = subsys
-        return tasks[idx - 2], glp
+    def _register(self, tm):
+        super()._register(tm)
+        self._subsys[0]._register(tm)
+        self._subsys[1]._register(tm)
+        return self
 
 
 class Task(LoopNode):
@@ -1014,7 +1030,7 @@ if 0:
     fn._add_args_kwargs(x=x, gain=gain, offs=offs)
     fn._register(tm)
 
-if 0:
+if 1:
     def quad(x):
         print('eval quad')
         return x**2
@@ -1043,7 +1059,7 @@ if 0:
 
     tp3 = TaskProgram(t1, t2, t21, t3)._register(tm)
     tp31 = TaskProgram(t21)._register(tm)
-    tp32 = TaskProgram()._register(tm)
+    #~ tp32 = TaskProgram()._register(tm)
 
     # test: tp3.as_list()
     # should be:
