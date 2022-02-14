@@ -609,13 +609,17 @@ class SystemNode:
         next_nodes += [sub._next_updates() for sub in self._subsys]
         return [set().union(*vals) for vals in zip_lazy(*next_nodes)]
 
-    def update(self):
+    def _update(self):
         for nodes in self._next_updates():
             #~ print(f'nodes for update: {nodes}')
             for node in nodes:
+                #~ print(f'update node:   {node}')
                 node()
             for node in nodes:
                 node._root._set(node._get())
+
+    def update(self):
+        self._update()
         return self.__node__().__call__()
 
     def reset(self):
@@ -769,11 +773,13 @@ class NestedSys(LoopNode):
             n -= 1
         next_states = set(state._next for state in loops[idxs[n]]._iter_all_states())
         #~ print(f'{n=}')
-        #~ print(f'{next_states =}')
+        #~ print(f'{idxs = }')
+        #~ print(f'{next_states = }')
         yield next_states
 
         init_states = set()
         idxs =  self.idxs()   # refresh loops due to possible new task
+        #~ print(f'{idxs = }    restarts:')
         while n < len(idxs) - 1:
             n += 1
             #~ print(f'    {n = }')
@@ -781,7 +787,7 @@ class NestedSys(LoopNode):
             if not loop.is_running():
                 init_states.update(state._init for state in loop._iter_all_states())
                 idxs = self.idxs()   # refresh loops due to possible new task
-        #~ print(f'{init_states =}')
+        #~ print(f'{init_states = }')
         yield init_states
 
     def is_running(self):
