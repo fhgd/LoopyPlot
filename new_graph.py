@@ -640,15 +640,25 @@ class LoopNode(SystemNode):
 
 
 class CountingLoopNode(LoopNode):
+    def __config__(self, *args, **kwargs):
+        self._num = args[0] if args else 1
+
     @state(init=0)
     def idx(idx):
         return idx + 1
 
-    def is_running(self):
-        return 0 <= self.idx < len(self) - 1
+    def is_valid(self):
+        return 0 <= self.idx < len(self)
+
+    def has_next(self):
+        return self.idx < len(self) - 1
 
     def __len__(self):
-        return 1
+        return self._num
+
+    @Function
+    def __return__(idx):
+        return idx
 
 
 class Sweep(CountingLoopNode):
@@ -1010,6 +1020,10 @@ class Zip:
 
 tm = TaskManager()
 
+if 1:
+    c = CountingLoopNode(3)._register(tm)
+    x = Sweep(5, 15, num=3)._register(tm)
+    s = Sequence('')._register(tm)
 
 if 0:
     def my():
@@ -1046,7 +1060,7 @@ if 0:
     fn._add_args_kwargs(x=x, gain=gain, offs=offs)
     fn._register(tm)
 
-if 1:
+if 0:
     def quad(x):
         print('eval quad')
         return x**2
@@ -1195,7 +1209,7 @@ if 0:
     # 5  20    10     0     200
 
 
-if 1:
+if 0:
     g = Sequence([3, 5])._register(tm)
     h = Sequence([127, 255])._register(tm)
     x = Sweep(10, 20, step=5)._register(tm)
