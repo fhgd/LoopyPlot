@@ -599,23 +599,39 @@ class SystemNode:
 
 
 class LoopNode(SystemNode):
+    def is_valid(self):
+        """Returns False if state is outside the nominal range."""
+        return True
+
+    def has_next(self):
+        """Returns False on the last element."""
+        return True
+
     def is_running(self):
-        return False
+        """Deprecated by has_next()."""
+        return self.has_next()
 
     def _next(self):
+        if not self.is_valid():
+            #~ print('1st STOP')
+            raise StopIteration
         nodes = self.__node__()._dep_nodes()
         if not nodes:
-            if self.is_running():
-                #~ self._next_state()
-                self.update()
+            if self.has_next():
+                self._update()
                 nodes = self.__node__()._dep_nodes()
             else:
+                #~ print('2nd STOP')
                 raise StopIteration
+                # Ideally this should moved into switched return-node
+                #   __return__node__    :  if is_valid()
+                #   raise StopIteration :  else
         return self.__node__().__call__(nodes)
 
     __next__ = _next
 
     def __iter__(self):
+        # self.reset()
         return self
 
     def as_list(self):
