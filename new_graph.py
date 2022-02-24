@@ -764,7 +764,7 @@ class NestedSys(LoopNode):
         loops = list(self._subsys)
         idxs = self.idxs()
         n = len(idxs) - 1
-        while not loops[idxs[n]].is_running():
+        while not loops[idxs[n]].has_next():
             n -= 1
         next_states = set(state._next for state in loops[idxs[n]]._iter_all_states())
         #~ print(f'{n=}')
@@ -779,15 +779,15 @@ class NestedSys(LoopNode):
             n += 1
             #~ print(f'    {n = }')
             loop = loops[idxs[n]]
-            if not loop.is_running():
+            if not loop.has_next():
                 init_states.update(state._init for state in loop._iter_all_states())
                 idxs = self.idxs()   # refresh loops due to possible new task
         #~ print(f'{init_states = }')
         yield init_states
 
-    def is_running(self):
+    def has_next(self):
         loops = list(self._subsys)
-        return any(loops[idx].is_running() for idx in self.idxs())
+        return any(loops[idx].has_next() for idx in self.idxs())
 
 
 class ConcatSys(NestedSys):
