@@ -459,7 +459,7 @@ class SystemNode:
         self._subsys = []
 
         inputs = []
-        func_nodes = []
+        self._func_nodes = []
         for cls in reversed(self.__class__.mro()):
             for name, attr in cls.__dict__.items():
                 if isinstance(attr, InP):
@@ -468,7 +468,7 @@ class SystemNode:
                     node = FuncNode(attr._func)
                     node._root = self
                     self._nodes[attr._name] = node
-                    func_nodes.append(node)
+                    self._func_nodes.append(node)
                 elif isinstance(attr, State):
                     name = attr._name
                     node = StateNode(name, attr._init)
@@ -476,7 +476,7 @@ class SystemNode:
                     node.add_next(attr._func)
                     self._nodes[name] = node
                     self._states.append(node)
-                    func_nodes.append(node._next)
+                    self._func_nodes.append(node._next)
 
         # resolve inputs to __init__(*args, **kwargs)
         inputs = sorted(inputs, key=lambda inp: inp._counter)
@@ -498,7 +498,7 @@ class SystemNode:
         self.__config__(*args, **kwargs)
 
         # resolve names of (keyword-) arguments with nodes
-        for fnode in func_nodes:
+        for fnode in self._func_nodes:
             params = inspect.signature(fnode._func).parameters
             for name, param in params.items():
                 if (param.kind is inspect.Parameter.VAR_POSITIONAL or
@@ -697,31 +697,56 @@ class Sequence(CountingLoopNode):
         return len(self.items)
 
 
+class GraphLoop(LoopNode):
+    target_edge = InP()
 
-class GraphLoop(CountingLoopNode):
-    g = InP()
-    on_exit = InP()
-    on_enter = InP()
+    def __config__(self, *args):
+        self.g = nx.MultiDiGraph()
+        self._edges = {}  # {edge: (pre_state, post_state)}
+        self._cache = {}  # {(current_node, target_node): edge}
+
+        _node = FuncNode(self._next_edge)
+        _node._root = self
+        self._nodes['_next_edge'] = _node
+        self._func_nodes.append(_node)
+
+        _state = self._nodes['current_edge']
+        _state.set_restart(lambda x: x, x=_state)
+
+    def add(self, edge, pre_state='', post_state=''):
+        self._edges[edge] = pre_state, post_state
+        self.g.add_edge(pre_state, post_state, edge)
+
+    def has_next(self):
+        return self.current_edge != self.target_edge
+        target, _ = self._edges[self.target_edge]
+        _, current = self._edges[self.current_edge]
+        return current != target
+
+    def _calc_path(self, current, target):
+        paths = nx.all_simple_edge_paths(self.g, current, target)
+        for current, child, edge in min(paths, key=lambda p: len(p), default=[]):
+            self._cache[current, target] = edge
+
+    def _next_edge(self, current_edge, target_edge):
+        _, current = self._edges[current_edge]
+        target, _ = self._edges[target_edge]
+        if current != target:
+            key = current, target
+            if key not in self._cache:
+                self._calc_path(current, target)
+            edge = self._cache[key]
+        else:
+            edge = target_edge
+        return edge
+
+    @state(init=0)
+    def current_edge(_next_edge):
+        return _next_edge
 
     @Function
-    def path(g, on_exit, on_enter):
-        paths = nx.all_simple_edge_paths(g, on_exit, on_enter)
-        paths = list(paths)
-        path = min(paths, key=lambda p: len(p))  #, default=[])
-        return path
-
-    @Function
-    def __return__(path, idx):
-        p1, p2, pfunc = path[idx]
-        return pfunc
-
-    def __len__(self):
-        return len(self.path())
-
-    ## todo: or just use
-    ##      calc_path(g, on_enter) -> path
-    ##      Sequence(path)
-
+    def __return__(current_edge):
+        return current_edge
 
 
 class ZipSys(LoopNode):
@@ -1010,7 +1035,7 @@ class Zip:
 
 tm = TaskManager()
 
-if 1:
+if 0:
     c = CountingLoopNode(3)._register(tm)
     x = Sweep(5, 15, num=3)._register(tm)
     s = Sequence('')._register(tm)
@@ -1087,6 +1112,17 @@ if 0:
     #   double, double,
     #   my,
     #   countdown
+
+if 1:
+    glp = GraphLoop(3)._register(tm)
+    glp.add(0, '', '')
+    glp.add(1, '',      'SLEEP')
+    glp.add(2, 'SLEEP', 'ON')
+    glp.add(3, 'ON',    'OFF')
+    glp.add(4, 'ON',    'OFF')
+    glp.add(5, 'ON',    'SLEEP')
+    glp.add(6, 'OFF',   'SLEEP')
+    glp.add(7, 'SLEEP', 'SLEEP')
 
 
 if 0:
