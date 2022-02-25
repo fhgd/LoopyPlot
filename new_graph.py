@@ -898,28 +898,32 @@ class ConcatSys(NestedSys):
 #           Nested(tasks, task_loop, graph_loop)
 class TaskProgram(NestedSys):
     def __config__(self, *tasks):
-        self.add_subsys(Sweep(0, len(tasks) - 1))  # idx
-
-        self.add_subsys(Sequence('AbC'))  # glp
-        #~ self.add_subsys(LoopNode())
-        #~ self.add_subsys(GraphLoop(g, on_exit, on_enter))
+        self.idx = self.add_subsys(CountingLoopNode(len(tasks)))._nodes['idx']
+        self.glp = self.add_subsys(GraphLoop(self.idx))
+        #~ state = self.glp._nodes['current_edge']
 
         for task in tasks:
-            self.add_subsys(task)
+            self.append_task(task)
         self._nodes['__return__'] = FuncNode(self.__return__)
         self._nodes['__return__']._iter_children = self.__return__children
 
-    def __return__(self, idx, n1, n2):
-        return n1, n2
+    def append_task(self, task):
+        self.add_subsys(task)
+        #~ self.g.add_edge(task._pre, task._post, task)
+        #~ self.g.add_edge(task._pre, tast._post, len(self._subsys) - 1)
+
+    def __return__(self, idx, current_edge, task):
+        return idx, current_edge, task
 
     def __return__children(self):
-        idx = self._subsys[0]._nodes['idx']
-        yield idx, ''
-        yield self._subsys[idx._get() + 2].__node__(), ''
-        yield self._subsys[1].__node__(), ''
+        yield self.idx, ''
+        task_idx = self.glp._nodes['current_edge']
+        yield task_idx, ''
+        task = self._subsys[task_idx._get() + 2]
+        yield task.__node__(), ''
 
     def idxs(self):
-        idx = self._subsys[0].idx
+        idx = self.idx._get()
         return [0, idx + 2, 1]
 
     def _register(self, tm):
@@ -930,7 +934,9 @@ class TaskProgram(NestedSys):
 
 
 class Task(LoopNode):
-    def __init__(self, func=None, name='', mainloop=None, *args, **kwargs):
+    def __init__(self, func=None, pre_state='', post_state='', name='',
+                 mainloop=None, *args, **kwargs,
+        ):
         super().__init__()  # SystemNode.__init__()
         if func is not None:
             self.set_return(FuncNode(func), *args, **kwargs)
@@ -938,6 +944,8 @@ class Task(LoopNode):
             mainloop = LoopNode()
             #~ mainloop = Sweep(0, 1)
         self.mainloop = self.add_subsys(mainloop)
+        self._pre = pre_state
+        self._post = post_state
 
         argitems = []
         if func:
@@ -946,8 +954,8 @@ class Task(LoopNode):
         self._name = f'{self.__class__.__name__}({", ".join(argitems)})'
 
 
-    def is_running(self):
-        return self.mainloop.is_running()
+    def has_next(self):
+        return self.mainloop.has_next()
 
 
 class Nested:
@@ -1157,7 +1165,7 @@ if 0:
     fn._add_args_kwargs(x=x, gain=gain, offs=offs)
     fn._register(tm)
 
-if 0:
+if 1:
     def quad(x):
         print('eval quad')
         return x**2
