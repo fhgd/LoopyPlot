@@ -307,20 +307,20 @@ class StateNode(Node):
         Node.__init__(self, name)
         self._next = FuncNode(lambda x: x, overwrite=True)
         self._next._root = self
-        self._init = ValueNode(init, 'init')
-        self._init._root = self
+        self._restart = ValueNode(init, 'restart')
+        self._restart._root = self
+        self._init = init
 
     def _register(self, tm):
         Node._register(self, tm)
         self._next._register(tm)
-        self._init._register(tm)
-        if not self._has_results() or self._get() != self._init._get():
+        self._restart._register(tm)
+        if not self._has_results() or self._get() != self._init:
             self.reset()
         return self
 
     def reset(self):
-        init = self._init._get()
-        self._set(init)
+        self._set(self._init)
         # reset needs to 'update' the state in dm
         # in order to trigger _new_inputs()
         #~ if self not in self._tm.dm or self._get() != init:
@@ -339,6 +339,11 @@ class StateNode(Node):
         self._next._func = func
         self._next._add_args_kwargs(*args, **kwargs)
         return self._next
+
+    def set_restart(self, func, *args, **kwargs):
+        self._restart = FuncNode(func, 'restart')
+        self._restart._add_args_kwargs(*args, **kwargs)
+        self._restart._root = self
 
     def _iter_state_updates(self):
         yield self._next
@@ -780,7 +785,7 @@ class NestedSys(LoopNode):
             #~ print(f'    {n = }')
             loop = loops[idxs[n]]
             if not loop.has_next():
-                init_states.update(state._init for state in loop._iter_all_states())
+                init_states.update(state._restart for state in loop._iter_all_states())
                 idxs = self.idxs()   # refresh loops due to possible new task
         #~ print(f'{init_states = }')
         yield init_states
@@ -1209,7 +1214,7 @@ if 0:
     # 5  20    10     0     200
 
 
-if 0:
+if 1:
     g = Sequence([3, 5])._register(tm)
     h = Sequence([127, 255])._register(tm)
     x = Sweep(10, 20, step=5)._register(tm)
