@@ -718,10 +718,9 @@ class GraphLoop(LoopNode):
         self.g.add_edge(pre_state, post_state, edge)
 
     def has_next(self):
-        return self.current_edge != self.target_edge
         target, _ = self._edges[self.target_edge]
         _, current = self._edges[self.current_edge]
-        return current != target
+        return current != target or self.current_edge != self.target_edge
 
     def _calc_path(self, current, target):
         paths = nx.all_simple_edge_paths(self.g, current, target)
