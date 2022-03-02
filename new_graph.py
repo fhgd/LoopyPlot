@@ -221,11 +221,13 @@ class FuncNode(Node):
         #~ yield start, start, "forward"
         visited.add(start)
         stack = [(start, depth_limit, start._iter_children())]
-        #~ print(f'    {start}: {list(start._iter_children())}')
+        #~ print(f'START node: {start}')
         while stack:
             parent, depth_now, children = stack[-1]
+            #~ print(f'{parent = }')
             try:
                 child, _ = next(children)
+                #~ print(f'    {child = }')
                 if child._last_idx > parent._last_idx:
                     #~ print(f'        is newer than parent')
                     needs_eval.add(parent)
@@ -234,20 +236,25 @@ class FuncNode(Node):
                     visited.add(child)
                     if depth_now > 1:
                         stack.append((child, depth_now - 1, child._iter_children()))
-                        #~ print(f'    {child}: {list(child._iter_children())}')
+                        #~ print(f'    append child: {list(child._iter_children())}')
                 #~ else:
                     #~ yield parent, child, "nontree"
+                    #~ print(f'    was visited:  {child=}')
             except StopIteration:
+                #~ print('    has NO further children')
                 stack.pop()
                 if stack:
                     #~ yield stack[-1][0], parent, "reverse"
                     grandpar = stack[-1][0]
-                    #~ print(f'        ??? {parent}:  {parent._last_idx=}  {idx=}')
                     if parent in needs_eval or parent._needs_eval():
+                        #~ print(f'    needs EVAL, append to OUTPUT')
                         nodes.append(parent)
                         needs_eval.add(grandpar)
+                        #~ print(f'    needs_eval.add: {grandpar = }')
         #~ yield start, start, "reverse"
+        #~ print(f'{start = }')
         if start in needs_eval or start._needs_eval():
+            #~ print(f'    needs EVAL, append to OUTPUT')
             nodes.append(start)
         return nodes
 
