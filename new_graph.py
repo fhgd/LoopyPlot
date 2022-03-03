@@ -714,9 +714,7 @@ class GraphLoop(LoopNode):
         _node._root = self
         self._nodes['_next_edge'] = _node
         self._func_nodes.append(_node)
-
-        _state = self._nodes['current_edge']
-        _state.set_restart(lambda x: x, x=_state)
+        self._nodes['current_edge']._restart = self._nodes['current_edge']._next
 
     def add(self, edge, pre_state='', post_state=''):
         self._edges[edge] = pre_state, post_state
@@ -726,6 +724,9 @@ class GraphLoop(LoopNode):
         target, _ = self._edges[self.target_edge]
         _, current = self._edges[self.current_edge]
         return current != target or self.current_edge != self.target_edge
+
+    def is_interrupted(self):
+        return self.current_edge == self.target_edge
 
     def _calc_path(self, current, target):
         paths = nx.all_simple_edge_paths(self.g, current, target)
@@ -1046,7 +1047,7 @@ class Zip:
 
 tm = TaskManager()
 
-if 1:
+if 0:
     class MyCounter(CountingLoopNode):
         def is_interrupted(self):
             return self.idx == 2
@@ -1262,7 +1263,7 @@ if 0:
     # 5  20    10     0     200
 
 
-if 0:
+if 1:
     g = Sequence([3, 5])._register(tm)
     h = Sequence([127, 255])._register(tm)
     x = Sweep(10, 20, step=5)._register(tm)
