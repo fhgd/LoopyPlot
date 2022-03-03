@@ -601,13 +601,16 @@ class LoopNode(SystemNode):
         """Deprecated by has_next()."""
         return self.has_next()
 
+    def is_interrupted(self):
+        return False
+
     def _next(self):
         if not self.is_valid():
             #~ print('1st STOP')
             raise StopIteration
         nodes = self.__node__()._dep_nodes()
         if not nodes:
-            if self.has_next():
+            if self.has_next() and not self.is_interrupted():
                 self._update()
                 nodes = self.__node__()._dep_nodes()
             else:
@@ -621,6 +624,8 @@ class LoopNode(SystemNode):
     __next__ = _next
 
     def __iter__(self):
+        if self.is_interrupted() and self.has_next():
+            self._update()
         # self.reset()
         return self
 
@@ -778,13 +783,16 @@ class NestedSys(LoopNode):
         loops = list(self._subsys)
         idxs = self.idxs()
         n = len(idxs) - 1
-        while not loops[idxs[n]].has_next():
+        loop = loops[idxs[n]]
+        while n > 0 and (not loop.has_next() or loop.is_interrupted()):
             n -= 1
-        next_states = set(state._next for state in loops[idxs[n]]._iter_all_states())
+            loop = loops[idxs[n]]
         #~ print(f'{n=}')
         #~ print(f'{idxs = }')
-        #~ print(f'{next_states = }')
-        yield next_states
+        if loop.has_next():
+            next_states = set(state._next for state in loops[idxs[n]]._iter_all_states())
+            #~ print(f'{next_states = }')
+            yield next_states
 
         init_states = set()
         idxs =  self.idxs()   # refresh loops due to possible new task
@@ -793,7 +801,11 @@ class NestedSys(LoopNode):
             n += 1
             #~ print(f'    {n = }')
             loop = loops[idxs[n]]
-            if not loop.has_next():
+            if loop.has_next() and loop.is_interrupted():
+                #~ print(f'    {loop} has next and is interrupted')
+                init_states.update(state._next for state in loop._iter_all_states())
+            else:
+                #~ print(f'    RESTART  {loop}')
                 init_states.update(state._restart for state in loop._iter_all_states())
                 idxs = self.idxs()   # refresh loops due to possible new task
         #~ print(f'{init_states = }')
@@ -1034,6 +1046,22 @@ class Zip:
 
 tm = TaskManager()
 
+if 1:
+    class MyCounter(CountingLoopNode):
+        def is_interrupted(self):
+            return self.idx == 2
+
+    c = MyCounter(10)._register(tm)
+    #~ print(list(c))
+    #~ print(list(c))
+    #~ print(list(c))
+    #~ print(list(c))
+
+    c = MyCounter(6)._register(tm)
+    x = Sweep(10, 20, step=5)._register(tm)
+    n = NestedSys(x, c)._register(tm)
+
+
 if 0:
     c = CountingLoopNode(3)._register(tm)
     x = Sweep(5, 15, num=3)._register(tm)
@@ -1234,7 +1262,7 @@ if 0:
     # 5  20    10     0     200
 
 
-if 1:
+if 0:
     g = Sequence([3, 5])._register(tm)
     h = Sequence([127, 255])._register(tm)
     x = Sweep(10, 20, step=5)._register(tm)
