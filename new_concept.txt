@@ -108,3 +108,25 @@ Expression Graph  (9.2.2021)
             * explicit == via update link
             * implicit == write to mutable object via function call
 
+
+
+
+==== Debugging FuncNode._dep_nodes() ===== (2.3.2022)
+
+     n35 => n30
+            n26
+            n34 => n30
+                => n26
+
+    *47     *50
+    n30     n26   (parent)
+     | \   / |
+     |  \ /  |
+     |  n34  |
+     |  *40  |
+     \   |   /
+      \  |  /
+       \ | /
+        n35       (grandparent)
+        *46
+

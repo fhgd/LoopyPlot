@@ -226,6 +226,9 @@ class FuncNode(Node):
             parent, depth_now, children = stack[-1]
             try:
                 child, _ = next(children)
+                if child._last_idx > parent._last_idx:
+                    #~ print(f'        is newer than parent')
+                    needs_eval.add(parent)
                 if child not in visited:
                     #~ yield parent, child, "forward"
                     visited.add(child)
@@ -242,9 +245,6 @@ class FuncNode(Node):
                     #~ print(f'        ??? {parent}:  {parent._last_idx=}  {idx=}')
                     if parent in needs_eval or parent._needs_eval():
                         nodes.append(parent)
-                        needs_eval.add(grandpar)
-                    elif parent._last_idx > grandpar._last_idx:
-                        #~ print(f'            is new')
                         needs_eval.add(grandpar)
         #~ yield start, start, "reverse"
         if start in needs_eval or start._needs_eval():
