@@ -561,7 +561,8 @@ class LoopNode(SystemNode):
 
     def _next(self):
         new_inputs = self._new_inputs()
-        if not new_inputs:
+        #~ if not new_inputs:
+        if not new_inputs and self._has_results():
             if self.is_running():
                 #~ self._next_state()
                 self.update()
@@ -732,6 +733,25 @@ class ConcatSys(NestedSys):
         return loops[idx - 1]
 
 
+# todo: TaskManager / TaskSequence / TaskProgram
+#           Nested(tasks, task_loop, graph_loop)
+class TaskProgram(NestedSys):
+    def __config__(self, *args, **kwargs):
+        self.idx = self.add_subsys(Sweep(2, len(args) + 1))
+        #~ self.glp = self.add_subsys(Sequence('AbC'))
+        self.glp = self.add_subsys(LoopNode())
+        #~ self.glp = self.add_subsys(GraphLoop(g, on_exit, on_enter))
+        self._subsys.extend(args)
+
+    def idxs(self):
+        return [0, self.idx(), 1]
+
+    @Function
+    def __return__(subsys):
+        idx, glp, *tasks = subsys
+        return tasks[idx - 2], glp
+
+
 class Task(LoopNode):
     def __init__(self, func=None, name='', mainloop=None, *args, **kwargs):
         super().__init__()  # SystemNode.__init__()
@@ -751,13 +771,6 @@ class Task(LoopNode):
 
     def is_running(self):
         return self.mainloop.is_running()
-
-
-if 0:
-    def quad(x):
-        return x**2
-
-    q = Task(quad)._register(tm)
 
 
 class Nested:
@@ -913,6 +926,51 @@ tm = TaskManager()
 
 
 if 0:
+    def my():
+        return 321
+
+    fmy = FuncNode(my)._register(tm)
+
+
+if 0:
+    t00 = Task()._register(tm)
+    # todo: __return__ == lambda: None
+
+
+if 0:
+    def my():
+        return 321
+    t0 = Task(my)._register(tm)
+
+
+
+if 0:
+    def quad(x):
+        return x**2
+    x1 = Sweep(10, 20, step=5)
+    t1 = Task(quad, mainloop=x1, x=x1)._register(tm)
+
+
+    def double(x):
+        return 2*x
+    x2 = Sequence([1, 2])
+    t2 = Task(double, mainloop=x2, x=x2)._register(tm)
+
+
+    def my():
+        return 321
+    t21 = Task(my)._register(tm)
+
+
+    def countdown(x):
+        return x
+    x3 = Sequence([3, 2, 1])
+    t3 = Task(countdown, mainloop=x3, x=x3)._register(tm)
+
+    tp3 = TaskProgram(t1, t2, t21, t3)._register(tm)
+    tp31 = TaskProgram(t21)._register(tm)
+
+if 0:
     def quad(x, gain=1, offs=0):
         return gain * x**2 + offs
 
@@ -1022,13 +1080,15 @@ if 0:
     # 5  20    10     0     200
 
 
-if 1:
+if 0:
     g = Sequence([3, 5])._register(tm)
     h = Sequence([127, 255])._register(tm)
     x = Sweep(10, 20, step=5)._register(tm)
 
     n = NestedSys(g, h, x)._register(tm)
     c = ConcatSys(x, g, h)._register(tm)
+    tp = TaskProgram(x, g, h)._register(tm)
+
 
 if 0:
     m1 = Sweep(2, 5)._register(tm)
