@@ -707,8 +707,9 @@ class GraphLoop(LoopNode):
 
     def __config__(self, *args):
         self.g = nx.MultiDiGraph()
-        self._edges = {}  # {edge: post_state, [pre_states, ...]}
         self._cache = {}  # {(current_node, target_edge): edge}
+        self._edges = {}  # {edge: post_state, [pre_states, ...]}
+        self._any = {}    # {edge: post_state}
 
         _node = FuncNode(self._next_edge)
         _node._root = self
@@ -716,10 +717,29 @@ class GraphLoop(LoopNode):
         self._func_nodes.append(_node)
         self._nodes['current_edge']._restart = self._nodes['current_edge']._next
 
-    def add(self, edge, pre_state='', post_state=''):
-        self.g.add_edge(pre_state, post_state, edge)
-        _, pre_states = self._edges.setdefault(edge, (post_state, []))
-        pre_states.append(pre_state)
+    def add(self, edge, pre_state=None, post_state=''):
+        if pre_state is None:
+            self._add_node(post_state)
+            for node in self.g.nodes():
+                self.g.add_edge(node, post_state, edge)
+                _, pre_states = self._edges.setdefault(edge, (post_state, []))
+                pre_states.append(node)
+            self._any[edge] = post_state
+        else:
+            self._add_node(pre_state)
+            self._add_node(post_state)
+            self.g.add_edge(pre_state, post_state, edge)
+            _, pre_states = self._edges.setdefault(edge, (post_state, []))
+            pre_states.append(pre_state)
+
+    def _add_node(self, new_node):
+        if new_node in self.g.nodes:
+            return
+        self.g.add_node(new_node)
+        for edge, post_state in self._any.items():
+            self.g.add_edge(new_node, post_state, edge)
+            _, pre_states = self._edges.setdefault(edge, (post_state, []))
+            pre_states.append(new_node)
 
     def has_next(self):
         target_post, _ = self._edges[self.target_edge]
@@ -1155,7 +1175,7 @@ if 0:
     def my(x21):
         print('eval my')
         return 321
-    x21 = Sequence([456])._register(tm)
+    x21 = Sequence([4, 5, 6])._register(tm)
     t21 = Task(my, mainloop=x21, x21=x21)._register(tm)
 
 
@@ -1187,6 +1207,16 @@ if 0:
 
 
 if 1:
+    glp = GraphLoop(5)._register(tm)
+    glp.add(0, '', '')
+    glp.add(1, None,    'SLEEP')
+    glp.add(2, 'SLEEP', 'ON')
+    glp.add(3, 'ON',    'OFF')
+    glp.add(4, 'ON',    'OFF')
+    glp.add(5, 'OFF',   'ON')
+
+
+if 0:
     glp = GraphLoop(5)._register(tm)
     glp.add(0, '', '')
     glp.add(1, '',      'SLEEP')
