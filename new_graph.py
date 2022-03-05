@@ -707,8 +707,8 @@ class GraphLoop(LoopNode):
 
     def __config__(self, *args):
         self.g = nx.MultiDiGraph()
-        self._edges = {}  # {edge: (pre_state, post_state)}
-        self._cache = {}  # {(current_node, target_node): edge}
+        self._edges = {}  # {edge: post_state, [pre_states, ...]}
+        self._cache = {}  # {(current_node, target_edge): edge}
 
         _node = FuncNode(self._next_edge)
         _node._root = self
@@ -717,32 +717,66 @@ class GraphLoop(LoopNode):
         self._nodes['current_edge']._restart = self._nodes['current_edge']._next
 
     def add(self, edge, pre_state='', post_state=''):
-        self._edges[edge] = pre_state, post_state
         self.g.add_edge(pre_state, post_state, edge)
+        _, pre_states = self._edges.setdefault(edge, (post_state, []))
+        pre_states.append(pre_state)
 
     def has_next(self):
-        target, _ = self._edges[self.target_edge]
-        _, current = self._edges[self.current_edge]
-        return current != target or self.current_edge != self.target_edge
+        target_post, _ = self._edges[self.target_edge]
+        current_post, _ = self._edges[self.current_edge]
+        return current_post != target_post or self.current_edge != self.target_edge
 
     def is_interrupted(self):
         return self.current_edge == self.target_edge
 
-    def _calc_path(self, current, target):
-        paths = nx.all_simple_edge_paths(self.g, current, target)
+    def _calc_path(self, current, target_edge):
+        # Based on copy from
+        # def _all_simple_edge_paths_multigraph(G, source, targets, cutoff)
+        # in networkx/algorithms/simple_paths.py
+        source = current
+        paths = []
+
+        G = self.g
+        cutoff = len(G) - 0
+        if not cutoff or cutoff < 1:
+            return []
+        visited = [source]
+        stack = [iter(G.edges(source, keys=True))]
+
+        #~ print(f'{source = }')
+        #~ print(f'{visited = }')
+
+        while stack:
+            children = stack[-1]
+            child = next(children, None)
+            #~ print(f'    {child = }')
+            if child is None:
+                stack.pop()
+                visited.pop()
+            elif len(visited) < cutoff:
+                if child[2] == target_edge:
+                    paths.append( visited[1:] + [child] )
+                elif child[1] not in [v[0] for v in visited[1:]]:
+                    visited.append(child)
+                    #~ print(f'    {visited = }')
+                    stack.append(iter(G.edges(child[1], keys=True)))
+            else:  # len(visited) == cutoff:
+                #~ print(f'{cutoff = }')
+                for (u, v, k) in [child] + list(children):
+                    if k == target_edge:
+                        paths.append( visited[1:] + [(u, v, k)] )
+                stack.pop()
+                visited.pop()
         for current, child, edge in min(paths, key=lambda p: len(p), default=[]):
-            self._cache[current, target] = edge
+            self._cache[current, target_edge] = edge
+        return paths
 
     def _next_edge(self, current_edge, target_edge):
-        _, current = self._edges[current_edge]
-        target, _ = self._edges[target_edge]
-        if current != target:
-            key = current, target
-            if key not in self._cache:
-                self._calc_path(current, target)
-            edge = self._cache[key]
-        else:
-            edge = target_edge
+        current, _ = self._edges[current_edge]
+        key = current, target_edge
+        if key not in self._cache:
+            self._calc_path(current, target_edge)
+        edge = self._cache[key]
         return edge
 
     @state(init=0)
@@ -1118,10 +1152,11 @@ if 0:
     t2 = Task(double, mainloop=x2, x=x2)._register(tm)
 
 
-    def my():
+    def my(x21):
         print('eval my')
         return 321
-    t21 = Task(my)._register(tm)
+    x21 = Sequence([456])._register(tm)
+    t21 = Task(my, mainloop=x21, x21=x21)._register(tm)
 
 
     def countdown(x):
@@ -1131,7 +1166,16 @@ if 0:
     t3 = Task(countdown, mainloop=x3, x=x3)._register(tm)
 
     tp3 = TaskProgram(t1, t2, t21, t3)._register(tm)
-    tp31 = TaskProgram(t21)._register(tm)
+    tp3.glp.add(0, '',      '')
+    tp3.glp.add(1, 'ON',    'OFF')
+
+    tp3.glp.add(2, '',      'ON')
+    tp3.glp.add(2, 'ON',    'ON')
+
+    tp3.glp.add(3, 'OFF',   'ON')
+
+
+    #~ tp31 = TaskProgram(t21)._register(tm)
     #~ tp32 = TaskProgram()._register(tm)
 
     # test: tp3.as_list()
@@ -1141,16 +1185,19 @@ if 0:
     #   my,
     #   countdown
 
+
 if 1:
-    glp = GraphLoop(3)._register(tm)
+    glp = GraphLoop(5)._register(tm)
     glp.add(0, '', '')
     glp.add(1, '',      'SLEEP')
+    glp.add(1, 'ON',    'SLEEP')
+    glp.add(1, 'OFF',   'SLEEP')
+    glp.add(1, 'SLEEP', 'SLEEP')
+
     glp.add(2, 'SLEEP', 'ON')
     glp.add(3, 'ON',    'OFF')
     glp.add(4, 'ON',    'OFF')
-    glp.add(5, 'ON',    'SLEEP')
-    glp.add(6, 'OFF',   'SLEEP')
-    glp.add(7, 'SLEEP', 'SLEEP')
+    glp.add(5, 'OFF',   'ON')
 
 
 if 0:
@@ -1263,7 +1310,7 @@ if 0:
     # 5  20    10     0     200
 
 
-if 1:
+if 0:
     g = Sequence([3, 5])._register(tm)
     h = Sequence([127, 255])._register(tm)
     x = Sweep(10, 20, step=5)._register(tm)
