@@ -2,33 +2,11 @@ import bisect
 import networkx as nx
 import pandas as pd
 
-import inspect
+import itertools
 from types import FunctionType, SimpleNamespace
 
-import itertools
-
-
-class _Nothing:
-    """
-    Sentinel class to indicate the lack of a value when ``None`` is ambiguous.
-
-    ``_Nothing`` is a singleton. There is only ever one of it.
-
-    from attr/_make.py
-    """
-
-    _singleton = None
-
-    def __new__(cls):
-        if _Nothing._singleton is None:
-            _Nothing._singleton = super(_Nothing, cls).__new__(cls)
-        return _Nothing._singleton
-
-    def __repr__(self):
-        return "NOTHING"
-
-
-NOTHING = _Nothing()
+import inspect
+NOTHING = inspect._empty
 
 
 class DataManager:
