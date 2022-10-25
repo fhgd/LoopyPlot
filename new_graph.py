@@ -93,7 +93,7 @@ class Node:
     def __call__(self):
         return self._get()
 
-    def _needs_eval(self):
+    def _needs_eval(self, respect_lazy=True):
         return False
 
     def _get(self):
@@ -179,10 +179,10 @@ class FuncNode(Node):
         retval = self._func(*args, **kwargs)
         self._set(retval)
 
-    def _needs_eval(self):
-        return not self._has_results() or not self._lazy
+    def _needs_eval(self, respect_lazy=True):
+        return not self._has_results() or (not self._lazy and respect_lazy)
 
-    def _dep_nodes(self):
+    def _dep_nodes(self, respect_lazy=True):
         """Return depending nodes needs to be evaluated from a depth-first-search."""
         # Based on copy from dfs_labeled_edges(G, source=None, depth_limit=None)
         # in networkx/algorithms/traversal/depth_first_search.py
@@ -224,14 +224,14 @@ class FuncNode(Node):
                 if stack:
                     #~ yield stack[-1][0], parent, "reverse"
                     grandpar = stack[-1][0]
-                    if parent in needs_eval or parent._needs_eval():
+                    if parent in needs_eval or parent._needs_eval(respect_lazy):
                         #~ print(f'    needs EVAL, append to OUTPUT')
                         nodes.append(parent)
                         needs_eval.add(grandpar)
                         #~ print(f'    needs_eval.add: {grandpar = }')
         #~ yield start, start, "reverse"
         #~ print(f'{start = }')
-        if start in needs_eval or start._needs_eval():
+        if start in needs_eval or start._needs_eval(respect_lazy):
             #~ print(f'    needs EVAL, append to OUTPUT')
             nodes.append(start)
         return nodes
@@ -608,18 +608,20 @@ class LoopNode(SystemNode):
         if not self.is_valid():
             #~ print('1st STOP')
             raise StopIteration
-        nodes = self.__node__()._dep_nodes()
+        nodes = self.__node__()._dep_nodes(respect_lazy=False)
         if not nodes:
             if self.has_next() and not self.is_interrupted():
                 self._update()
-                nodes = self.__node__()._dep_nodes()
             else:
                 #~ print('2nd STOP')
                 raise StopIteration
                 # Ideally this should moved into switched return-node
                 #   __return__node__    :  if is_valid()
                 #   raise StopIteration :  else
-        return self.__node__().__call__(nodes)
+        #  todo: try to cache somehow
+        #        _dep_nodes(respect_lazy=True) from
+        #        _dep_nodes(respect_lazy=False)
+        return self.__node__().__call__()
 
     __next__ = _next
 
@@ -913,7 +915,7 @@ class TaskProgram(NestedSys):
         #~ self.g.add_edge(task._pre, tast._post, len(self._subsys) - 1)
 
     def __return__(self, idx, current_edge, task):
-        #~ print(f'    RETURN    {self._subsys[idx+2], idx, current_edge, self._subsys[current_edge+2], task}')
+        print(f'    RETURN    {self._subsys[idx+2], idx, current_edge, self._subsys[current_edge+2], task}')
         return self._subsys[idx+2], idx, current_edge, self._subsys[current_edge+2], task
 
     def __return__children(self):
@@ -948,7 +950,8 @@ class TaskProgram(NestedSys):
         if (task.is_valid()
             and task.has_next()
             and not task.is_interrupted()
-            and not task.__node__()._dep_nodes()  # todo: should be cached somehow!
+            # todo: _dep_nodes() should be cached somehow!
+            and not task.__node__()._dep_nodes(respect_lazy=False)
         ):
             next_states = set(state._next for state in task._iter_all_states())
             #~ print(f'current task ({task}) {next_states = }')
@@ -963,11 +966,12 @@ class TaskProgram(NestedSys):
 
 class Task(LoopNode):
     def __init__(self, func=None, pre_state='', post_state='', name='',
-                 mainloop=None, *args, **kwargs,
+                 mainloop=None, lazy=False, *args, **kwargs,
         ):
         super().__init__()  # SystemNode.__init__()
         if func is not None:
             self.set_return(FuncNode(func), *args, **kwargs)
+            self._nodes['__return__']._lazy = lazy
         if mainloop is None:
             mainloop = CountingLoopNode()
             #~ mainloop = Sweep(0, 1)
@@ -980,7 +984,6 @@ class Task(LoopNode):
             argitems = [func.__name__]
         #~ argitems += [f'{name}={val!r}' for name, val in kwargs.items()]
         self._name = f'{self.__class__.__name__}({", ".join(argitems)})'
-
 
     def has_next(self):
         return self.mainloop.has_next()
@@ -1205,8 +1208,7 @@ if 1:
         print('eval double')
         return 2*x
     x2 = Sequence([1, 2])
-    t2 = Task(double, mainloop=x2, x=x2)._register(tm)
-
+    t2 = Task(double, lazy=False, mainloop=x2, x=x2)._register(tm)
 
     def my(x21):
         print(f'eval my:  {321 + x21*0.1}')
@@ -1233,8 +1235,9 @@ if 1:
     tp3.glp.add(3, 'OFF',   'ON')
 
 
-    for _ in range(8):
-        tp3._next()
+    #~ for _ in range(8):
+        #~ tp3._next()
+    tp3.as_list()
 
     #~ tp31 = TaskProgram(t21)._register(tm)
     #~ tp32 = TaskProgram()._register(tm)
