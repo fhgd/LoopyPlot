@@ -162,7 +162,7 @@ class FuncNode(Node):
         if nodes is None:
             nodes = self._dep_nodes()
         for node in nodes:
-            print(f'    eval {node}')
+            #~ print(f'    eval {node}')
             node.__eval__()
         return self._get()
 
@@ -913,7 +913,8 @@ class TaskProgram(NestedSys):
         #~ self.g.add_edge(task._pre, tast._post, len(self._subsys) - 1)
 
     def __return__(self, idx, current_edge, task):
-        return idx, current_edge, task
+        #~ print(f'    RETURN    {self._subsys[idx+2], idx, current_edge, self._subsys[current_edge+2], task}')
+        return self._subsys[idx+2], idx, current_edge, self._subsys[current_edge+2], task
 
     def __return__children(self):
         yield self.idx, ''
@@ -925,6 +926,33 @@ class TaskProgram(NestedSys):
     def idxs(self):
         idx = self.idx._get()
         return [0, idx + 2, 1]
+
+    def _next_updates(self):
+        glp = self.glp
+        tp = self.idx._root
+        tp_task = list(self._subsys)[self.idx._get() + 2]
+
+        if (glp.is_interrupted()
+            and (not tp_task.has_next() or tp_task.is_interrupted())
+            and tp.has_next()
+        ):
+            next_states = set(state._next for state in tp._iter_all_states())
+            #~ print(f'tp {next_states = }')
+            yield next_states
+
+        next_states = set(state._next for state in glp._iter_all_states())
+        #~ print(f'GLP {next_states = }')
+        yield next_states
+
+        task = list(self._subsys)[glp._nodes['current_edge']._get() + 2]
+        if (task.is_valid()
+            and task.has_next()
+            and not task.is_interrupted()
+            and not task.__node__()._dep_nodes()  # todo: should be cached somehow!
+        ):
+            next_states = set(state._next for state in task._iter_all_states())
+            #~ print(f'current task ({task}) {next_states = }')
+            yield next_states
 
     def _register(self, tm):
         super()._register(tm)
@@ -941,7 +969,7 @@ class Task(LoopNode):
         if func is not None:
             self.set_return(FuncNode(func), *args, **kwargs)
         if mainloop is None:
-            mainloop = LoopNode()
+            mainloop = CountingLoopNode()
             #~ mainloop = Sweep(0, 1)
         self.mainloop = self.add_subsys(mainloop)
         self._pre = pre_state
@@ -1181,27 +1209,32 @@ if 1:
 
 
     def my(x21):
-        print('eval my')
-        return 321
-    x21 = Sequence([4, 5, 6])._register(tm)
+        print(f'eval my:  {321 + x21*0.1}')
+        return 321 + x21*0.1
+    x21 = Sequence([4, 5, 6, 7, 8])._register(tm)
     t21 = Task(my, mainloop=x21, x21=x21)._register(tm)
 
 
-    def countdown(x):
+    def countdown(x='__3-2-1-0__'):
         print('eval countdown')
         return x
     x3 = Sequence(['3-2-1-0'])
-    t3 = Task(countdown, mainloop=x3, x=x3)._register(tm)
+    x3 = CountingLoopNode()._register(tm)
+    t3 = Task(countdown, mainloop=x3)._register(tm)
 
     tp3 = TaskProgram(t1, t2, t21, t3)._register(tm)
     tp3.glp.add(0, '',      '')
     tp3.glp.add(1, 'ON',    'OFF')
 
-    tp3.glp.add(2, '',      'ON')
+    tp3.glp.add(2, None,    'ON')
+    #~ tp3.glp.add(2, '',      'ON')
     tp3.glp.add(2, 'ON',    'ON')
 
     tp3.glp.add(3, 'OFF',   'ON')
 
+
+    for _ in range(8):
+        tp3._next()
 
     #~ tp31 = TaskProgram(t21)._register(tm)
     #~ tp32 = TaskProgram()._register(tm)
